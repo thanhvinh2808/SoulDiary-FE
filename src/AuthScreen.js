@@ -10,16 +10,61 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { COLORS } from './theme';
+import { authService } from './services/authService';
 
 const AuthScreen = ({ onLoginSuccess }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Form State
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Toggle giữa Login và Register
-  const toggleMode = () => setIsRegister(!isRegister);
+  const toggleMode = () => {
+    setIsRegister(!isRegister);
+    // Reset form
+    setName('');
+    setEmail('');
+    setPassword('');
+  };
+
+  const handleAuth = async () => {
+    // Basic Validation
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+    if (isRegister && !name) {
+      Alert.alert('Error', 'Please enter your name');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (isRegister) {
+        await authService.register(name, email, password);
+        Alert.alert('Success', 'Account created! Please log in.');
+        toggleMode(); // Switch to login
+      } else {
+        const data = await authService.login(email, password);
+        // TODO: Save token here (e.g., AsyncStorage)
+        console.log('Login Data:', data);
+        onLoginSuccess();
+      }
+    } catch (error) {
+      Alert.alert('Authentication Failed', error.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -61,6 +106,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
                       style={styles.input}
                       placeholder="e.g. John Doe"
                       placeholderTextColor="#D6D3D1"
+                      value={name}
+                      onChangeText={setName}
                     />
                   </View>
                 </View>
@@ -77,6 +124,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
                     placeholderTextColor="#D6D3D1"
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
                   />
                 </View>
               </View>
@@ -91,6 +140,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
                     placeholder="Enter your password"
                     placeholderTextColor="#D6D3D1"
                     secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                     <MaterialIcons 
@@ -109,10 +160,18 @@ const AuthScreen = ({ onLoginSuccess }) => {
               )}
 
               {/* Primary Button */}
-              <TouchableOpacity style={styles.mainButton} onPress={onLoginSuccess}>
-                <Text style={styles.mainButtonText}>
-                  {isRegister ? 'Sign Up' : 'Log In'}
-                </Text>
+              <TouchableOpacity 
+                style={[styles.mainButton, loading && { opacity: 0.7 }]} 
+                onPress={handleAuth}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.mainButtonText}>
+                    {isRegister ? 'Sign Up' : 'Log In'}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
 

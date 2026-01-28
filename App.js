@@ -19,7 +19,6 @@ import { COLORS } from './src/theme';
 
 import HistoryScreen from './src/HistoryScreen';
 import CalendarScreen from './src/CalendarScreen';
-import EditorScreen from './src/EditorScreen'; // Có thể xóa nếu không dùng
 import AnalyticsScreen from './src/AnalyticsScreen';
 import AuthScreen from './src/AuthScreen';
 import NewEntryScreen from './src/NewEntryScreen'; // Import lại
@@ -66,8 +65,6 @@ export default function App() {
       case 'Home':
         return <HomeScreen onNavigate={navigateTo} />;
       case 'NewEntry':
-        return <NewEntryScreen onClose={() => navigateTo('Home')} />;
-      case 'Editor': // Map Editor case về NewEntryScreen luôn cho chắc
         return <NewEntryScreen onClose={() => navigateTo('Home')} />;
       case 'History':
         return <HistoryScreen onNavigate={navigateTo} />;
