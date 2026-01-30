@@ -1,0 +1,15 @@
+# Dependency directories
+node_modules/
+
+# Environment variables
+.env
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
