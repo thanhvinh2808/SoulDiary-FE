@@ -39,7 +39,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
   // 🔧 REDIRECT URI - Nhất quán cho cả Google và Facebook
   const redirectUri = makeRedirectUri({
     scheme: 'souldiary',
-    path: 'redirect'
+    path: 'redirect',
+    useProxy: true,
   });
 
   // Log để debug
@@ -56,16 +57,14 @@ const AuthScreen = ({ onLoginSuccess }) => {
     androidClientId: '41247382516-hedjbqieuige5lfkolt3flctolms69ta.apps.googleusercontent.com',
     webClientId: '41247382516-1nbdp00km72e261hcipuqcamb9dttu8d.apps.googleusercontent.com',
     scopes: ['openid', 'profile', 'email'],
+    redirectUri: redirectUri,
   });
 
   // ✅ FACEBOOK AUTH CONFIG
   const [fRequest, fResponse, promptFacebookAsync] = Facebook.useAuthRequest({
     clientId: '913094248341605',
-    // Sử dụng scheme trực tiếp thay vì proxy
-    redirectUri: makeRedirectUri({
-      scheme: 'souldiary',
-      path: 'redirect',
-    }),
+    // Sử dụng chung Redirect URI (có Proxy) để ổn định
+    redirectUri: redirectUri,
     scopes: ['public_profile', 'email'],
     responseType: 'token',
   });
