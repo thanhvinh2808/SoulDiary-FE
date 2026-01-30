@@ -102,7 +102,7 @@ exports.facebookLogin = catchAsync(async (req, res, next) => {
   const facebookId = fb.id;
   const name = fb.name;
   const email = fb.email; // có thể null nếu user không cấp quyền
-  const photo = fb.picture?.data?.url;
+  const photo = fb.picture;
 
   let user = await User.findOne({ facebookId }).select("+refreshToken");
 

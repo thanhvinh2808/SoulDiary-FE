@@ -36,15 +36,10 @@ const AuthScreen = ({ onLoginSuccess }) => {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
 
-  // 🔧 REDIRECT URI - Cấu hình lại để khớp với Google Cloud Console
-  const redirectUri = Platform.select({
-    native: makeRedirectUri({
-      scheme: 'souldiary',
-      path: 'redirect',
-    }),
-    default: makeRedirectUri({
-      path: 'redirect',
-    }),
+  // 🔧 REDIRECT URI - Đưa về cấu hình chuẩn để tránh mismatch
+  const redirectUri = makeRedirectUri({
+    scheme: 'souldiary',
+    path: 'redirect',
   });
 
   // Log để debug
@@ -143,7 +138,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
       // Kiểm tra response từ backend
       if (data && (data.token || data.status === 'success')) {
         console.log('✅ Login successful, calling onLoginSuccess');
-        onLoginSuccess();
+        // Backend trả về { status, token, data: { user } }
+        onLoginSuccess(data.data?.user || data.user);
       } else {
         throw new Error('Invalid response from server');
       }
@@ -200,8 +196,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
         );
       } else {
         console.log('🔐 Logging in user:', emailInput);
-        await authService.login(emailInput, passwordInput);
-        onLoginSuccess();
+        const responseData = await authService.login(emailInput, passwordInput);
+        onLoginSuccess(responseData.data?.user || responseData.user);
       }
     } catch (error) {
       console.error('❌ Auth error:', error);
@@ -334,6 +330,7 @@ const AuthScreen = ({ onLoginSuccess }) => {
                 style={[styles.socialBtn, (!fRequest || loading) && styles.buttonDisabled]} 
                 onPress={() => {
                   console.log('🔵 Facebook button pressed');
+                  console.log('📍 FB Redirect URI:', redirectUri);
                   promptFacebookAsync();
                 }}
                 disabled={!fRequest || loading}

@@ -44,8 +44,26 @@ exports.verifyGoogleIdToken = async (token) => {
 };
 
 exports.verifyFacebookAccessToken = async (accessToken) => {
-  const response = await axios.get("https://graph.facebook.com/me", {
-    params: { access_token: accessToken, fields: "id,name,email,picture" },
-  });
-  return response.data; // { id, name, email?, picture? }
+  try {
+    console.log("Ticket: Verifying Facebook Access Token...");
+    const response = await axios.get("https://graph.facebook.com/me", {
+      params: { 
+        access_token: accessToken, 
+        fields: "id,name,email,picture.type(large)" 
+      },
+    });
+    
+    const data = response.data;
+    if (!data.id) throw new Error("Invalid Facebook token");
+
+    return {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      picture: data.picture?.data?.url
+    };
+  } catch (error) {
+    console.error("❌ Facebook Token verification failed:", error.response?.data || error.message);
+    throw new Error("Facebook authentication failed");
+  }
 };
