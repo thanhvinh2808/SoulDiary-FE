@@ -1,6 +1,0 @@
-.env
-node_modules/
-package-lock.json
-.idea/
-server_out.log
-server_err.log

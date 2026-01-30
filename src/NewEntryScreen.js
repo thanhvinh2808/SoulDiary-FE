@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,12 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
+import { diaryService } from './services/diaryService';
 
 const MOODS = [
   { id: 'happy', emoji: '😊', label: 'Happy' },
@@ -22,9 +25,39 @@ const MOODS = [
   { id: 'anxious', emoji: '😰', label: 'Anxious' },
 ];
 
-const NewEntryScreen = ({ onClose }) => {
+const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
   const [selectedMood, setSelectedMood] = useState('happy');
   const [entryText, setEntryText] = useState('');
+  const [title, setTitle] = useState(''); // Thêm title state
+  const [loading, setLoading] = useState(false);
+
+  // Nếu có entryId, tức là đang edit (logic load dữ liệu cũ bỏ qua để đơn giản hóa flow ban đầu)
+  // Nhưng cần đảm bảo có diaryId
+  
+  const handleSave = async () => {
+    if (!diaryId) {
+       Alert.alert("Error", "No Diary Selected");
+       return;
+    }
+    if (!entryText.trim()) {
+      Alert.alert("Empty Entry", "Please write something!");
+      return;
+    }
+
+    setLoading(true);
+    try {
+       // Tự động lấy dòng đầu làm title nếu không nhập title
+       const finalTitle = title || entryText.split('\n')[0].substring(0, 50) + "...";
+       
+       await diaryService.createEntry(diaryId, finalTitle, entryText, selectedMood);
+       Alert.alert("Success", "Entry saved successfully!");
+       onClose(); // Quay về Home và trigger reload (vì Home fetch lại trong useEffect khi mount)
+    } catch (error) {
+       Alert.alert("Error", "Failed to save entry: " + error.message);
+    } finally {
+       setLoading(false);
+    }
+  };
 
   // Styles động (dù hiện tại chỉ dùng Light Mode, giữ cấu trúc này để dễ mở rộng)
   const themeStyles = {
@@ -42,15 +75,21 @@ const NewEntryScreen = ({ onClose }) => {
         
         {/* Header */}
         <View style={styles.header}>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose} disabled={loading}>
                 <MaterialIcons name="close" size={24} color={COLORS.textGray} />
             </TouchableOpacity>
             <View style={styles.headerTitleContainer}>
-                <Text style={[styles.headerTitle, { color: COLORS.textMain }]}>New Entry</Text>
-                <Text style={styles.headerDate}>OCTOBER 24, 2023</Text>
+                <Text style={[styles.headerTitle, { color: COLORS.textMain }]}>
+                  {entryId ? 'Edit Entry' : 'New Entry'}
+                </Text>
+                <Text style={styles.headerDate}>{new Date().toDateString()}</Text>
             </View>
-            <TouchableOpacity style={styles.doneButton} onPress={onClose}>
-                <Text style={styles.doneButtonText}>Done</Text>
+            <TouchableOpacity style={styles.doneButton} onPress={handleSave} disabled={loading}>
+                {loading ? (
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                    <Text style={styles.doneButtonText}>Done</Text>
+                )}
             </TouchableOpacity>
         </View>
 
@@ -113,6 +152,7 @@ const NewEntryScreen = ({ onClose }) => {
 
                 {/* Footer / Tags */}
                 <View style={styles.footer}>
+                    {/* Tags UI giữ nguyên nhưng chưa có logic xử lý API tags */}
                     <View style={styles.tagsContainer}>
                         <MaterialIcons name="label" size={20} color={COLORS.textGray} style={{ marginRight: 8 }} />
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -129,11 +169,6 @@ const NewEntryScreen = ({ onClose }) => {
                         </ScrollView>
                     </View>
                     
-                    {/* Autosave Indicator */}
-                    <View style={styles.autosaveContainer}>
-                        <View style={styles.autosaveDot} />
-                        <Text style={styles.autosaveText}>Saving...</Text>
-                    </View>
                 </View>
 
             </ScrollView>

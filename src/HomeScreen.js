@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,86 @@ import {
   Dimensions,
   Platform,
   useColorScheme,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
+import { diaryService } from './services/diaryService';
 
 const HomeScreen = ({ onNavigate }) => {
   const isDark = false; // Luôn dùng Light Mode
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [currentDiaryId, setCurrentDiaryId] = useState(null);
+
+  const fetchDat = useCallback(async () => {
+    try {
+      setLoading(true);
+      // 1. Lấy danh sách Diary
+      let diaries = await diaryService.getDiaries();
+      
+      // Tự động tạo Diary mặc định nếu chưa có (dành cho User mới)
+      if (!diaries || diaries.length === 0) {
+        try {
+           console.log("No diaries found. Creating default diary...");
+           const newDiary = await diaryService.createDiary("My Journal", "Personal diary created automatically");
+           diaries = [newDiary];
+        } catch (createError) {
+           console.error("Failed to create default diary", createError);
+        }
+      }
+
+      if (diaries && diaries.length > 0) {
+        // Mặc định lấy diary đầu tiên
+        const firstDiary = diaries[0];
+        setCurrentDiaryId(firstDiary.id || firstDiary._id);
+
+        // 2. Lấy Entries của Diary đó
+        const diaryEntries = await diaryService.getEntries(firstDiary.id || firstDiary._id);
+        setEntries(diaryEntries);
+      } else {
+        // Trường hợp lỗi tạo diary
+        setEntries([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch data', error);
+      // Không alert lỗi chặn người dùng, chỉ log
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDat();
+  }, [fetchDat]);
+
+  // Format Date: "2023-10-25..." -> Month: "OCT", Date: "25"
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    return {
+      month: months[date.getMonth()],
+      day: date.getDate().toString()
+    };
+  };
+
+  const getMoodIcon = (mood) => {
+    switch (mood?.toLowerCase()) {
+      case 'happy': return 'sentiment-very-satisfied';
+      case 'sad': return 'sentiment-very-dissatisfied';
+      case 'neutral': return 'sentiment-neutral';
+      default: return 'sentiment-satisfied'; // default
+    }
+  };
+
+  const getMoodColor = (mood) => {
+    switch (mood?.toLowerCase()) {
+      case 'happy': return COLORS.primary;
+      case 'sad': return COLORS.textGray;
+      default: return COLORS.primary;
+    }
+  };
 
   const themeStyles = {
     container: {
@@ -45,19 +119,31 @@ const HomeScreen = ({ onNavigate }) => {
     }
   };
 
-  const renderEntry = (month, date, title, subtitle, moodIcon, moodColor) => (
-    <TouchableOpacity style={[styles.entryCard, themeStyles.entryBg, { borderColor: 'transparent' }]}>
-      <View style={[styles.dateBox, isDark ? { backgroundColor: COLORS.backgroundDark } : { backgroundColor: '#FFFFFF' }]}>
-        <Text style={styles.dateMonth}>{month}</Text>
-        <Text style={[styles.dateDay, isDark && { color: '#FFF' }]}>{date}</Text>
-      </View>
-      <View style={styles.entryContent}>
-        <Text style={[styles.entryTitle, themeStyles.textPrimary]} numberOfLines={1}>{title}</Text>
-        <Text style={[styles.entrySubtitle, { color: COLORS.textGray }]} numberOfLines={1}>{subtitle}</Text>
-      </View>
-      <MaterialIcons name={moodIcon} size={28} color={moodColor} />
-    </TouchableOpacity>
-  );
+  const renderEntryItem = (item) => {
+    const { month, day } = formatDate(item.date);
+    const moodIcon = getMoodIcon(item.mood);
+    const moodColor = getMoodColor(item.mood);
+
+    return (
+      <TouchableOpacity 
+        key={item.id || item._id} 
+        style={[styles.entryCard, themeStyles.entryBg, { borderColor: 'transparent' }]}
+        onPress={() => onNavigate('NewEntry', { entryId: item.id || item._id, diaryId: currentDiaryId })}
+      >
+        <View style={[styles.dateBox, isDark ? { backgroundColor: COLORS.backgroundDark } : { backgroundColor: '#FFFFFF' }]}>
+          <Text style={styles.dateMonth}>{month}</Text>
+          <Text style={[styles.dateDay, isDark && { color: '#FFF' }]}>{day}</Text>
+        </View>
+        <View style={styles.entryContent}>
+          <Text style={[styles.entryTitle, themeStyles.textPrimary]} numberOfLines={1}>{item.title}</Text>
+          <Text style={[styles.entrySubtitle, { color: COLORS.textGray }]} numberOfLines={1}>
+            {item.content || 'No content preview'}
+          </Text>
+        </View>
+        <MaterialIcons name={moodIcon} size={28} color={moodColor} />
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, themeStyles.container]}>
@@ -70,8 +156,8 @@ const HomeScreen = ({ onNavigate }) => {
                  <MaterialIcons name="menu" size={28} color={isDark ? '#FFF' : '#111811'} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, themeStyles.textPrimary]}>SoulDiary</Text>
-            <TouchableOpacity style={styles.iconButton}>
-                 <MaterialIcons name="notifications-none" size={28} color={isDark ? '#FFF' : '#111811'} />
+            <TouchableOpacity style={styles.iconButton} onPress={fetchDat}>
+                 <MaterialIcons name="refresh" size={28} color={isDark ? '#FFF' : '#111811'} />
             </TouchableOpacity>
         </View>
 
@@ -103,7 +189,10 @@ const HomeScreen = ({ onNavigate }) => {
 
             {/* Write Button */}
             <View style={styles.actionContainer}>
-                <TouchableOpacity style={styles.writeButton} onPress={() => onNavigate('Editor')}>
+                <TouchableOpacity 
+                  style={styles.writeButton} 
+                  onPress={() => onNavigate('NewEntry', { diaryId: currentDiaryId })}
+                >
                     <MaterialIcons name="edit-note" size={24} color="#111811" />
                     <Text style={styles.writeButtonText}>Write Today's Story</Text>
                 </TouchableOpacity>
@@ -119,9 +208,15 @@ const HomeScreen = ({ onNavigate }) => {
 
             {/* Entries List */}
             <View style={styles.entriesList}>
-                {renderEntry('OCT', '25', 'Feeling peaceful after the walk...', 'Reflecting on the nature and silence.', 'sentiment-satisfied', COLORS.primary)}
-                {renderEntry('OCT', '24', 'A bit overwhelmed today, but handled it.', 'Focusing on breathing exercises.', 'sentiment-neutral', COLORS.textGray)}
-                {renderEntry('OCT', '23', 'Grateful for small wins at work.', 'Completed the project on time.', 'sentiment-very-satisfied', COLORS.primary)}
+                {loading ? (
+                  <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />
+                ) : entries.length > 0 ? (
+                  entries.map(renderEntryItem)
+                ) : (
+                  <Text style={{ textAlign: 'center', color: COLORS.textGray, marginTop: 20 }}>
+                    No entries yet. Start writing!
+                  </Text>
+                )}
             </View>
 
             {/* Padding for Bottom Nav */}

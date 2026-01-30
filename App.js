@@ -31,7 +31,7 @@ SplashScreen.preventAutoHideAsync();
 export default function App() {
   // FORCE LIGHT MODE: Luôn luôn là false để giữ nền Beige
   const isDark = false; 
-  const [currentScreen, setCurrentScreen] = useState('Onboarding'); 
+  const [navState, setNavState] = useState({ screen: 'Onboarding', params: {} });
 
   let [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -54,24 +54,25 @@ export default function App() {
     return null;
   }
 
-  const navigateTo = (screen) => setCurrentScreen(screen);
+  const navigateTo = (screen, params = {}) => setNavState({ screen, params });
 
   const renderScreen = () => {
-    switch (currentScreen) {
+    const { screen, params } = navState;
+    switch (screen) {
       case 'Onboarding':
         return <OnboardingScreen onGetStarted={() => navigateTo('Auth')} />;
       case 'Auth':
-        return <AuthScreen onLoginSuccess={() => navigateTo('Home')} />;
+        return <AuthScreen onLoginSuccess={() => navigateTo('Home')} {...params} />;
       case 'Home':
-        return <HomeScreen onNavigate={navigateTo} />;
+        return <HomeScreen onNavigate={navigateTo} {...params} />;
       case 'NewEntry':
-        return <NewEntryScreen onClose={() => navigateTo('Home')} />;
+        return <NewEntryScreen onClose={() => navigateTo('Home')} {...params} />;
       case 'History':
-        return <HistoryScreen onNavigate={navigateTo} />;
+        return <HistoryScreen onNavigate={navigateTo} {...params} />;
       case 'Calendar':
-        return <CalendarScreen onNavigate={navigateTo} />;
+        return <CalendarScreen onNavigate={navigateTo} {...params} />;
       case 'Analytics':
-        return <AnalyticsScreen onNavigate={navigateTo} />;
+        return <AnalyticsScreen onNavigate={navigateTo} {...params} />;
       default:
         return <OnboardingScreen onGetStarted={() => navigateTo('Auth')} />;
     }
