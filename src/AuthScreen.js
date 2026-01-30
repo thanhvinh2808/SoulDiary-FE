@@ -62,7 +62,11 @@ const AuthScreen = ({ onLoginSuccess }) => {
   // ✅ FACEBOOK AUTH CONFIG
   const [fRequest, fResponse, promptFacebookAsync] = Facebook.useAuthRequest({
     clientId: '913094248341605',
-    redirectUri,
+    // Sử dụng useProxy: true để Expo xử lý redirect
+    useProxy: true,
+    redirectUri: makeRedirectUri({
+      useProxy: true
+    }),
     scopes: ['public_profile', 'email'],
     responseType: 'token',
   });
