@@ -51,21 +51,21 @@ const AuthScreen = ({ onLoginSuccess }) => {
 
   // ✅ GOOGLE AUTH CONFIG
   const [gRequest, gResponse, promptGoogleAsync] = Google.useAuthRequest({
-    expoClientId: '41247382516-1nbdp00km72e261hcipuqcamb9dttu8d.apps.googleusercontent.com',
-    androidClientId: '41247382516-hedjbqieuige5lfkolt3flctolms69ta.apps.googleusercontent.com',
+    // Client ID bạn cung cấp cho iOS
     iosClientId: '41247382516-hbui90gsqmtbdagni8sho68ffhfisv4p.apps.googleusercontent.com',
+    // Giữ lại các ID khác nếu bạn có, hoặc để trống nếu chưa có
+    androidClientId: '41247382516-hedjbqieuige5lfkolt3flctolms69ta.apps.googleusercontent.com',
     webClientId: '41247382516-1nbdp00km72e261hcipuqcamb9dttu8d.apps.googleusercontent.com',
     scopes: ['openid', 'profile', 'email'],
-    redirectUri,
   });
 
   // ✅ FACEBOOK AUTH CONFIG
   const [fRequest, fResponse, promptFacebookAsync] = Facebook.useAuthRequest({
     clientId: '913094248341605',
-    // Sử dụng useProxy: true để Expo xử lý redirect
-    useProxy: true,
+    // Sử dụng scheme trực tiếp thay vì proxy
     redirectUri: makeRedirectUri({
-      useProxy: true
+      scheme: 'souldiary',
+      path: 'redirect',
     }),
     scopes: ['public_profile', 'email'],
     responseType: 'token',
