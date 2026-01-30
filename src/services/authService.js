@@ -109,8 +109,15 @@ export const authService = {
 
       // Lưu token nếu có
       if (data.token) {
-        await this.saveToken(data.token);
-        console.log('✅ Login successful, token saved');
+        // Backend trả về { access_token, refresh_token }
+        // Chúng ta cần access_token để gọi API
+        const accessToken = data.token.access_token || data.token;
+        if (typeof accessToken === 'string') {
+           await this.saveToken(accessToken);
+           console.log('✅ Login successful, token saved');
+        } else {
+           console.warn('⚠️ Token is not a string:', accessToken);
+        }
       }
 
       return data;
@@ -205,8 +212,11 @@ export const authService = {
       }
 
       if (data.token) {
-        await this.saveToken(data.token);
-        console.log('✅ Google Login successful, token saved');
+        const accessToken = data.token.access_token || data.token;
+        if (typeof accessToken === 'string') {
+          await this.saveToken(accessToken);
+          console.log('✅ Google Login successful, token saved');
+        }
       }
 
       return data;
@@ -258,8 +268,11 @@ export const authService = {
       }
 
       if (data.token) {
-        await this.saveToken(data.token);
-        console.log('✅ Facebook Login successful, token saved');
+        const accessToken = data.token.access_token || data.token;
+        if (typeof accessToken === 'string') {
+          await this.saveToken(accessToken);
+          console.log('✅ Facebook Login successful, token saved');
+        }
       }
 
       return data;
