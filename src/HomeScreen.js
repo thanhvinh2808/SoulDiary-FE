@@ -40,21 +40,21 @@ const HomeScreen = ({ onNavigate }) => {
         }
       }
 
-      if (diaries && diaries.length > 0) {
+      if (diaries && Array.isArray(diaries) && diaries.length > 0) {
         // Mặc định lấy diary đầu tiên
         const firstDiary = diaries[0];
         setCurrentDiaryId(firstDiary.id || firstDiary._id);
 
         // 2. Lấy Entries của Diary đó
         const diaryEntries = await diaryService.getEntries(firstDiary.id || firstDiary._id);
-        setEntries(diaryEntries);
+        setEntries(Array.isArray(diaryEntries) ? diaryEntries : []);
       } else {
-        // Trường hợp lỗi tạo diary
+        // Trường hợp lỗi tạo diary hoặc ko có diary
         setEntries([]);
       }
     } catch (error) {
       console.error('Failed to fetch data', error);
-      // Không alert lỗi chặn người dùng, chỉ log
+      setEntries([]); // Đảm bảo entries không bị undefined
     } finally {
       setLoading(false);
     }
@@ -210,7 +210,7 @@ const HomeScreen = ({ onNavigate }) => {
             <View style={styles.entriesList}>
                 {loading ? (
                   <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />
-                ) : entries.length > 0 ? (
+                ) : (Array.isArray(entries) && entries.length > 0) ? (
                   entries.map(renderEntryItem)
                 ) : (
                   <Text style={{ textAlign: 'center', color: COLORS.textGray, marginTop: 20 }}>

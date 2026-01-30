@@ -3,6 +3,7 @@ const app = express();
 const cookieParser = require("cookie-parser");
 const setupSwagger = require("./swagger");
 const authRouter = require("./routes/authRouter");
+const diaryRouter = require("./routes/diaryRouter");
 app.use(express.json());
 app.use(cookieParser());
 setupSwagger(app);
@@ -30,6 +31,7 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 
 //route
 app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/diaries", diaryRouter);
 app.use((req, res) => {
   res.status(404).send("Not Found");
 });

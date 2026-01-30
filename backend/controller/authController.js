@@ -196,3 +196,53 @@ exports.logout = catchAsync(async (req, res) => {
 
   res.status(200).json({ status: "success" });
 });
+
+exports.protect = catchAsync(async (req, res, next) => {
+  // 1) Lấy token và check xem có tồn tại không
+  let token;
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
+  }
+
+  if (!token) {
+    return next(
+      new AppError("Bạn chưa đăng nhập! Vui lòng đăng nhập để truy cập.", 401),
+    );
+  }
+
+  // 2) Verify token
+  // Chúng ta dùng jwt.verify trực tiếp hoặc qua tokenService (nếu có hàm verifyAccessToken)
+  // Ở đây giả sử dùng thư viện jsonwebtoken trực tiếp vì tokenService có thể chưa export verifyAccessToken
+  const jwt = require("jsonwebtoken");
+  const decoded = await new Promise((resolve, reject) => {
+    jwt.verify(token, process.env.JWT_ACCESS_SECRET, (err, decoded) => {
+      if (err) reject(err);
+      resolve(decoded);
+    });
+  });
+
+  // 3) Check xem user còn tồn tại không
+  const currentUser = await User.findById(decoded.id);
+  if (!currentUser) {
+    return next(
+      new AppError(
+        "User sở hữu token này không còn tồn tại.",
+        401,
+      ),
+    );
+  }
+
+  // 4) Check xem user có đổi mật khẩu sau khi token được cấp không
+  if (currentUser.changePasswordAfter(decoded.iat)) {
+    return next(
+      new AppError("User gần đây đã đổi mật khẩu! Vui lòng đăng nhập lại.", 401),
+    );
+  }
+
+  // Gán user vào request để các middleware sau dùng
+  req.user = currentUser;
+  next();
+});
