@@ -36,11 +36,15 @@ const AuthScreen = ({ onLoginSuccess }) => {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
 
-  // 🔧 REDIRECT URI - Nhất quán cho cả Google và Facebook
-  const redirectUri = makeRedirectUri({
-    scheme: 'souldiary',
-    path: 'redirect',
-    useProxy: true,
+  // 🔧 REDIRECT URI - Cấu hình lại để khớp với Google Cloud Console
+  const redirectUri = Platform.select({
+    native: makeRedirectUri({
+      scheme: 'souldiary',
+      path: 'redirect',
+    }),
+    default: makeRedirectUri({
+      path: 'redirect',
+    }),
   });
 
   // Log để debug
@@ -58,6 +62,7 @@ const AuthScreen = ({ onLoginSuccess }) => {
     webClientId: '41247382516-1nbdp00km72e261hcipuqcamb9dttu8d.apps.googleusercontent.com',
     scopes: ['openid', 'profile', 'email'],
     redirectUri: redirectUri,
+    prompt: 'select_account',
   });
 
   // ✅ FACEBOOK AUTH CONFIG
@@ -75,8 +80,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
       console.log('✅ Google OAuth Success');
       const { authentication } = gResponse;
       
-      // Ưu tiên accessToken, fallback sang idToken
-      const token = authentication?.accessToken || authentication?.idToken;
+      // Ưu tiên idToken vì backend cần nó để verify (google-auth-library verifyIdToken)
+      const token = authentication?.idToken || authentication?.accessToken;
       
       if (token) {
         console.log('📤 Sending Google token to backend');

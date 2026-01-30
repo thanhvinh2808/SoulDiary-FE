@@ -1,7 +1,11 @@
 const express = require("express");
 const app = express();
+const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const setupSwagger = require("./swagger");
+
+app.use(cors());
+app.use(express.json());
 const authRouter = require("./routes/authRouter");
 const diaryRouter = require("./routes/diaryRouter");
 app.use(express.json());
