@@ -51,9 +51,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
 
   // ✅ GOOGLE AUTH CONFIG
   const [gRequest, gResponse, promptGoogleAsync] = Google.useAuthRequest({
-    // Client ID bạn cung cấp cho iOS
+    // Client ID bạn cung cấp
     iosClientId: '41247382516-hbui90gsqmtbdagni8sho68ffhfisv4p.apps.googleusercontent.com',
-    // Giữ lại các ID khác nếu bạn có, hoặc để trống nếu chưa có
     androidClientId: '41247382516-hedjbqieuige5lfkolt3flctolms69ta.apps.googleusercontent.com',
     webClientId: '41247382516-1nbdp00km72e261hcipuqcamb9dttu8d.apps.googleusercontent.com',
     scopes: ['openid', 'profile', 'email'],
