@@ -84,3 +84,66 @@ exports.createEntry = catchAsync(async (req, res, next) => {
   // Trả về entry vừa tạo (là phần tử cuối cùng)
   res.status(201).json(diary.entries[diary.entries.length - 1]);
 });
+
+// Lấy chi tiết 1 bài viết
+exports.getEntry = catchAsync(async (req, res, next) => {
+  const diary = await Diary.findOne({ _id: req.params.diaryId, user: req.user.id });
+
+  if (!diary) {
+    return next(new AppError('No diary found with that ID', 404));
+  }
+
+  const entry = diary.entries.id(req.params.id);
+
+  if (!entry) {
+    return next(new AppError('No entry found with that ID', 404));
+  }
+
+  res.status(200).json(entry);
+});
+
+// Cập nhật bài viết
+exports.updateEntry = catchAsync(async (req, res, next) => {
+  const diary = await Diary.findOne({ _id: req.params.diaryId, user: req.user.id });
+
+  if (!diary) {
+    return next(new AppError('No diary found with that ID', 404));
+  }
+
+  const entry = diary.entries.id(req.params.id);
+
+  if (!entry) {
+    return next(new AppError('No entry found with that ID', 404));
+  }
+
+  // Cập nhật các fields
+  if (req.body.title) entry.title = req.body.title;
+  if (req.body.content) entry.content = req.body.content;
+  if (req.body.mood) entry.mood = req.body.mood;
+  if (req.body.date) entry.date = req.body.date;
+  if (req.body.images) entry.images = req.body.images;
+
+  await diary.save();
+
+  res.status(200).json(entry);
+});
+
+// Xóa bài viết
+exports.deleteEntry = catchAsync(async (req, res, next) => {
+  const diary = await Diary.findOne({ _id: req.params.diaryId, user: req.user.id });
+
+  if (!diary) {
+    return next(new AppError('No diary found with that ID', 404));
+  }
+
+  const entry = diary.entries.id(req.params.id);
+
+  if (!entry) {
+    return next(new AppError('No entry found with that ID', 404));
+  }
+
+  entry.deleteOne();
+  await diary.save();
+
+  res.status(204).json({ status: 'success', data: null });
+});

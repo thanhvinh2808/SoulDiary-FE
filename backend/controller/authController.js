@@ -11,22 +11,16 @@ const User = require("../models/userModel");
 exports.register = catchAsync(async (req, res, next) => {
   const { email, password, name } = req.body;
   
-  console.log(`📝 Register request received for: ${email}`);
-
   if (!email || !password) {
-    console.log("❌ Missing email or password");
     return next(new AppError("Thiếu email hoặc password", 400));
   }
 
   const existed = await authService.findUser(email);
   if (existed) {
-    console.log(`⚠️ User already exists: ${email}`);
     return next(new AppError("Email đã tồn tại", 409));
   }
 
-  console.log("🔄 Creating new user in MongoDB...");
   const user = await User.create({ email, password, name });
-  console.log(`✅ User created successfully: ${user._id}`);
 
   await authService.createSendToken(user, 201, res);
 });

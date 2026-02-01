@@ -194,7 +194,7 @@ const HistoryScreen = ({ onNavigate }) => {
         {/* FAB */}
         <TouchableOpacity 
             style={styles.fab}
-            onPress={() => onNavigate('Editor')}
+            onPress={() => onNavigate('NewEntry')}
         >
             <MaterialIcons name="add" size={32} color="#112111" />
         </TouchableOpacity>

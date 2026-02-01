@@ -8,7 +8,6 @@ app.use(cors());
 app.use(express.json());
 const authRouter = require("./routes/authRouter");
 const diaryRouter = require("./routes/diaryRouter");
-app.use(express.json());
 app.use(cookieParser());
 setupSwagger(app);
 /**
@@ -36,8 +35,11 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 //route
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/diaries", diaryRouter);
-app.use((req, res) => {
-  res.status(404).send("Not Found");
+app.use((req, res, next) => {
+  next(new Error(`Can't find ${req.originalUrl} on this server!`)); 
 });
+
+const globalErrorHandler = require("./controller/errorController");
+app.use(globalErrorHandler);
 
 module.exports = app;

@@ -31,8 +31,28 @@ const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
   const [title, setTitle] = useState(''); // Thêm title state
   const [loading, setLoading] = useState(false);
 
-  // Nếu có entryId, tức là đang edit (logic load dữ liệu cũ bỏ qua để đơn giản hóa flow ban đầu)
-  // Nhưng cần đảm bảo có diaryId
+  // Load entry data if entryId is provided
+  useEffect(() => {
+    if (diaryId && entryId) {
+      const loadEntry = async () => {
+        setLoading(true);
+        try {
+          const entry = await diaryService.getEntryById(diaryId, entryId);
+          if (entry) {
+            setTitle(entry.title || '');
+            setEntryText(entry.content || '');
+            setSelectedMood(entry.mood || 'neutral');
+          }
+        } catch (error) {
+          console.error('Failed to load entry:', error);
+          Alert.alert('Error', 'Failed to load the entry for editing.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadEntry();
+    }
+  }, [diaryId, entryId]);
   
   const handleSave = async () => {
     if (!diaryId) {
@@ -49,9 +69,20 @@ const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
        // Tự động lấy dòng đầu làm title nếu không nhập title
        const finalTitle = title || entryText.split('\n')[0].substring(0, 50) + "...";
        
-       await diaryService.createEntry(diaryId, finalTitle, entryText, selectedMood);
-       Alert.alert("Success", "Entry saved successfully!");
-       onClose(); // Quay về Home và trigger reload (vì Home fetch lại trong useEffect khi mount)
+       if (entryId) {
+         // Update existing entry
+         await diaryService.updateEntry(diaryId, entryId, {
+           title: finalTitle,
+           content: entryText,
+           mood: selectedMood
+         });
+         Alert.alert("Success", "Entry updated successfully!");
+       } else {
+         // Create new entry
+         await diaryService.createEntry(diaryId, finalTitle, entryText, selectedMood);
+         Alert.alert("Success", "Entry saved successfully!");
+       }
+       onClose(); // Quay về Home và trigger reload
     } catch (error) {
        Alert.alert("Error", "Failed to save entry: " + error.message);
     } finally {

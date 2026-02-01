@@ -79,9 +79,12 @@ export default function App() {
   const navigateTo = (screen, params = {}) => setNavState({ screen, params });
 
   const handleLoginSuccess = (userData) => {
+    console.log('📱 App.js: handleLoginSuccess called with:', userData?.email);
     const name = userData?.name || 'Friend';
     showToast(`Welcome back, ${name}! ✨`);
-    navigateTo('Home');
+    
+    // Đảm bảo chuyển trang ngay lập tức
+    setNavState({ screen: 'Home', params: {} });
   };
 
   const renderScreen = () => {

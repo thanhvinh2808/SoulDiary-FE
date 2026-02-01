@@ -23,7 +23,7 @@ const HomeScreen = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [currentDiaryId, setCurrentDiaryId] = useState(null);
 
-  const fetchDat = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       // 1. Lấy danh sách Diary
@@ -32,7 +32,6 @@ const HomeScreen = ({ onNavigate }) => {
       // Tự động tạo Diary mặc định nếu chưa có (dành cho User mới)
       if (!diaries || diaries.length === 0) {
         try {
-           console.log("No diaries found. Creating default diary...");
            const newDiary = await diaryService.createDiary("My Journal", "Personal diary created automatically");
            diaries = [newDiary];
         } catch (createError) {
@@ -61,8 +60,8 @@ const HomeScreen = ({ onNavigate }) => {
   }, []);
 
   useEffect(() => {
-    fetchDat();
-  }, [fetchDat]);
+    fetchData();
+  }, [fetchData]);
 
   // Format Date: "2023-10-25..." -> Month: "OCT", Date: "25"
   const formatDate = (dateString) => {
@@ -156,7 +155,7 @@ const HomeScreen = ({ onNavigate }) => {
                  <MaterialIcons name="menu" size={28} color={isDark ? '#FFF' : '#111811'} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, themeStyles.textPrimary]}>SoulDiary</Text>
-            <TouchableOpacity style={styles.iconButton} onPress={fetchDat}>
+            <TouchableOpacity style={styles.iconButton} onPress={fetchData}>
                  <MaterialIcons name="refresh" size={28} color={isDark ? '#FFF' : '#111811'} />
             </TouchableOpacity>
         </View>

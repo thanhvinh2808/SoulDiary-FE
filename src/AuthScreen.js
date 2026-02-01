@@ -36,87 +36,74 @@ const AuthScreen = ({ onLoginSuccess }) => {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
 
-  // 🔧 REDIRECT URI - Đưa về cấu hình chuẩn để tránh mismatch
+  // 🔧 REDIRECT URI - Để Expo tự quyết định URI tốt nhất cho môi trường Native
   const redirectUri = makeRedirectUri({
     scheme: 'souldiary',
-    path: 'redirect',
+     úseProxy: false,
   });
 
-  // Log để debug
+  // Log để bạn copy chính xác vào Google Console
   useEffect(() => {
-    console.log('📱 App Config:');
-    console.log('  - Redirect URI:', redirectUri);
-    console.log('  - Platform:', Platform.OS);
-  }, []);
+    console.log('--- COPY LINK NÀY VÀO GOOGLE CONSOLE ---');
+    console.log(redirectUri);
+    console.log('---------------------------------------');
+  }, [redirectUri]);
 
   // ✅ GOOGLE AUTH CONFIG
   const [gRequest, gResponse, promptGoogleAsync] = Google.useAuthRequest({
-    // Client ID bạn cung cấp
-    iosClientId: '41247382516-hbui90gsqmtbdagni8sho68ffhfisv4p.apps.googleusercontent.com',
     androidClientId: '41247382516-hedjbqieuige5lfkolt3flctolms69ta.apps.googleusercontent.com',
     webClientId: '41247382516-1nbdp00km72e261hcipuqcamb9dttu8d.apps.googleusercontent.com',
-    scopes: ['openid', 'profile', 'email'],
-    redirectUri: redirectUri,
-    prompt: 'select_account',
+    iosClientId: '41247382516-hbui90gsqmtbdagni8sho68ffhfisv4p.apps.googleusercontent.com',
+
   });
+
+  // Gọi hàm prompt trực tiếp
+  const handleGoogleLogin = () => {
+    promptGoogleAsync();
+  };
 
   // ✅ FACEBOOK AUTH CONFIG
   const [fRequest, fResponse, promptFacebookAsync] = Facebook.useAuthRequest({
     clientId: '913094248341605',
-    // Sử dụng chung Redirect URI (có Proxy) để ổn định
-    redirectUri: redirectUri,
-    scopes: ['public_profile', 'email'],
-    responseType: 'token',
   });
 
   // 🔧 XỬ LÝ GOOGLE RESPONSE
   useEffect(() => {
     if (gResponse?.type === 'success') {
-      console.log('✅ Google OAuth Success');
       const { authentication } = gResponse;
       
-      // Ưu tiên idToken vì backend cần nó để verify (google-auth-library verifyIdToken)
+      // ID Token là JWT chứa đầy đủ thông tin user và an toàn hơn để verify ở Backend
+      // Access Token chỉ là chuỗi ngẫu nhiên để gọi API Google
       const token = authentication?.idToken || authentication?.accessToken;
       
       if (token) {
-        console.log('📤 Sending Google token to backend');
         handleSocialLogin('google', token);
       } else {
-        console.error('❌ No token received from Google');
         Alert.alert('Error', 'Failed to get Google token');
       }
     } else if (gResponse?.type === 'error') {
-      console.error('❌ Google OAuth Error:', gResponse.error);
       Alert.alert(
         'Google Login Failed', 
         gResponse.error?.message || 'An error occurred'
       );
-    } else if (gResponse?.type === 'cancel') {
-      console.log('⚠️ User cancelled Google login');
     }
   }, [gResponse]);
 
   // 🔧 XỬ LÝ FACEBOOK RESPONSE
   useEffect(() => {
     if (fResponse?.type === 'success') {
-      console.log('✅ Facebook OAuth Success');
       const { authentication } = fResponse;
       
       if (authentication?.accessToken) {
-        console.log('📤 Sending Facebook token to backend');
         handleSocialLogin('facebook', authentication.accessToken);
       } else {
-        console.error('❌ No access token received from Facebook');
         Alert.alert('Error', 'Failed to get Facebook token');
       }
     } else if (fResponse?.type === 'error') {
-      console.error('❌ Facebook OAuth Error:', fResponse.error);
       Alert.alert(
         'Facebook Login Failed', 
         fResponse.error?.message || 'An error occurred'
       );
-    } else if (fResponse?.type === 'cancel') {
-      console.log('⚠️ User cancelled Facebook login');
     }
   }, [fResponse]);
 
@@ -124,8 +111,6 @@ const AuthScreen = ({ onLoginSuccess }) => {
   const handleSocialLogin = async (provider, token) => {
     setLoading(true);
     try {
-      console.log(`🔄 Processing ${provider} login...`);
-      
       let data;
       if (provider === 'google') {
         data = await authService.loginGoogle(token);
@@ -133,22 +118,25 @@ const AuthScreen = ({ onLoginSuccess }) => {
         data = await authService.loginFacebook(token);
       }
       
-      console.log(`✅ ${provider} backend response:`, data);
-      
-      // Kiểm tra response từ backend
-      if (data && (data.token || data.status === 'success')) {
-        console.log('✅ Login successful, calling onLoginSuccess');
-        // Backend trả về { status, token, data: { user } }
-        onLoginSuccess(data.data?.user || data.user);
+      console.log(`✅ ${provider} login response:`, JSON.stringify(data, null, 2));
+
+      // Kiểm tra thành công dựa trên cấu trúc trả về từ backend controller
+      // Backend: { status: "success", token: { ... }, data: { user: ... } }
+      if (data && (data.status === 'success' || data.token)) {
+        const user = data.data?.user || data.user;
+        if (user) {
+          onLoginSuccess(user);
+        } else {
+           console.warn('⚠️ Login success but no user data found in response');
+           // Vẫn gọi onLoginSuccess để bypass nếu cần thiết, hoặc báo lỗi
+           onLoginSuccess({ name: 'User', email: 'user@example.com' }); 
+        }
       } else {
-        throw new Error('Invalid response from server');
+        throw new Error(data?.message || 'Cấu trúc dữ liệu từ server không hợp lệ');
       }
     } catch (error) {
       console.error(`❌ ${provider} login failed:`, error);
-      Alert.alert(
-        'Login Failed', 
-        error.message || 'Unable to connect to server. Please try again.'
-      );
+      Alert.alert('Đăng nhập thất bại', error.message || 'Không thể kết nối tới máy chủ');
     } finally {
       setLoading(false);
     }
@@ -183,7 +171,6 @@ const AuthScreen = ({ onLoginSuccess }) => {
     setLoading(true);
     try {
       if (isRegister) {
-        console.log('📝 Registering new user:', emailInput);
         await authService.register(fullName, emailInput, passwordInput);
         Alert.alert(
           'Success', 
@@ -195,12 +182,10 @@ const AuthScreen = ({ onLoginSuccess }) => {
           }}]
         );
       } else {
-        console.log('🔐 Logging in user:', emailInput);
         const responseData = await authService.login(emailInput, passwordInput);
         onLoginSuccess(responseData.data?.user || responseData.user);
       }
     } catch (error) {
-      console.error('❌ Auth error:', error);
       Alert.alert(
         'Authentication Failed', 
         error.message || 'Please check your credentials and try again.'
@@ -226,11 +211,11 @@ const AuthScreen = ({ onLoginSuccess }) => {
             {/* HEADER */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
-                <MaterialIcons name="edit-note" size={64} color={COLORS.primary} />
+                <MaterialIcons name="edit-note" size={95} color={COLORS.primary} />
               </View>
               <Text style={styles.appName}>SoulDiary</Text>
               <Text style={styles.title}>
-                {isRegister ? 'Create Account' : 'Welcome Back'}
+                {isRegister ? 'Create Account' : 'Hi, My Friend!'}
               </Text>
               <Text style={styles.subtitle}>
                 {isRegister 
@@ -329,8 +314,6 @@ const AuthScreen = ({ onLoginSuccess }) => {
               <TouchableOpacity 
                 style={[styles.socialBtn, (!fRequest || loading) && styles.buttonDisabled]} 
                 onPress={() => {
-                  console.log('🔵 Facebook button pressed');
-                  console.log('📍 FB Redirect URI:', redirectUri);
                   promptFacebookAsync();
                 }}
                 disabled={!fRequest || loading}
@@ -342,8 +325,7 @@ const AuthScreen = ({ onLoginSuccess }) => {
               <TouchableOpacity 
                 style={[styles.socialBtn, (!gRequest || loading) && styles.buttonDisabled]}
                 onPress={() => {
-                  console.log('🔴 Google button pressed');
-                  promptGoogleAsync();
+                  handleGoogleLogin();
                 }}
                 disabled={!gRequest || loading}
                 activeOpacity={0.7}
@@ -392,9 +374,9 @@ const styles = StyleSheet.create({
     marginBottom: 32 
   },
   iconContainer: {
-    width: 100, 
-    height: 100, 
-    borderRadius: 50, 
+    width:200, 
+    height: 200, 
+    borderRadius: 100, 
     backgroundColor: '#FFFFFF',
     alignItems: 'center', 
     justifyContent: 'center', 

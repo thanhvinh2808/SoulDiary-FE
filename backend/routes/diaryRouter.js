@@ -24,4 +24,10 @@ router
   .get(diaryController.getEntries)
   .post(diaryController.createEntry);
 
+router
+  .route('/:diaryId/entries/:id')
+  .get(diaryController.getEntry)
+  .patch(diaryController.updateEntry)
+  .delete(diaryController.deleteEntry);
+
 module.exports = router;

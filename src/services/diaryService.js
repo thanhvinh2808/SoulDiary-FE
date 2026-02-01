@@ -54,7 +54,7 @@ export const diaryService = {
   // Cập nhật bài viết
   async updateEntry(diaryId, entryId, data) {
     return await api(`/diaries/${diaryId}/entries/${entryId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   },
