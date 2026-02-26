@@ -10,6 +10,7 @@ import {
   Platform,
   Dimensions
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 
@@ -59,7 +60,8 @@ const MOOD_COLORS = {
 
 const CalendarScreen = ({ onNavigate }) => {
   // FORCE LIGHT MODE
-  const isDark = false; 
+  const isDark = false;
+  const insets = useSafeAreaInsets(); 
 
   const themeStyles = {
     container: { backgroundColor: COLORS.backgroundLight },
@@ -99,10 +101,10 @@ const CalendarScreen = ({ onNavigate }) => {
   return (
     <View style={[styles.container, themeStyles.container]}>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <TouchableOpacity style={styles.iconButton}>
                 <MaterialIcons name="chevron-left" size={28} color={COLORS.textMain} />
             </TouchableOpacity>
