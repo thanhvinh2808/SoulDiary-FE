@@ -25,6 +25,8 @@ import AuthScreen from './src/AuthScreen';
 import NewEntryScreen from './src/NewEntryScreen'; // Import lại
 import HomeScreen from './src/HomeScreen';
 import OnboardingScreen from './src/OnboardingScreen';
+import ProfileScreen from './src/ProfileScreen';
+import EditProfileScreen from './src/EditProfileScreen';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -104,6 +106,10 @@ export default function App() {
         return <CalendarScreen onNavigate={navigateTo} {...params} />;
       case 'Analytics':
         return <AnalyticsScreen onNavigate={navigateTo} {...params} />;
+      case 'Profile':
+        return <ProfileScreen onNavigate={navigateTo} {...params} />;
+      case 'EditProfile':
+        return <EditProfileScreen onNavigate={navigateTo} params={params} {...params} />;
       default:
         return <OnboardingScreen onGetStarted={() => navigateTo('Auth')} />;
     }

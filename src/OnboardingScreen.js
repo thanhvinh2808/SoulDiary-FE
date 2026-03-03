@@ -10,6 +10,7 @@ import {
   Platform,
   ImageBackground,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 
@@ -17,7 +18,8 @@ const { width } = Dimensions.get('window');
 
 const OnboardingScreen = ({ onGetStarted }) => {
   // FORCE LIGHT MODE
-  const isDark = false; 
+  const isDark = false;
+  const insets = useSafeAreaInsets(); 
 
   const themeStyles = {
     container: {
@@ -37,11 +39,11 @@ const OnboardingScreen = ({ onGetStarted }) => {
   const featherImageUri = "https://lh3.googleusercontent.com/aida-public/AB6AXuD1BxV_wcU0eVTJNdgz9r-V9n25VdEpKbT9NADtWv0GScLuivQCTPVvZuFEkqbFSCFuwSnwzN_papwydtzharkDy8twMKk4r-aRUmy4NU1TZ_58xDB5nlisvtsXqSfN_ANK4u9YXEPV6MEVKEfz8BRE5AbH_PDroVWDpZ8RcLVDaz-uoycD9C8CQE6N7XxgIadhbGKlZwQvNAyypPOD2Nhs1X27BzSNZiUmn8FS4CfykEt5fkvOPHsf4HcIsPYzAGN_e9Iyj1DJgvmL";
 
   return (
-    <SafeAreaView style={[styles.container, themeStyles.container]}>
+    <SafeAreaView style={[styles.container, themeStyles.container, { paddingTop: 0 }]} edges={['left', 'right', 'bottom']}>
       <StatusBar barStyle="dark-content" />
       
       {/* Top Navigation Bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
         <View style={{ width: 40 }} />
         <Text style={[styles.headerTitle, themeStyles.textPrimary]}>SoulDiary</Text>
         <TouchableOpacity onPress={onGetStarted}>
