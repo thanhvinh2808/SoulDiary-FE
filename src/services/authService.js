@@ -291,6 +291,83 @@ export const authService = {
     }
   },
 
+  async getCurrentUser() {
+    try {
+      const token = await this.getToken();
+      if (!token) {
+        throw new Error('No token found. Please login first.');
+      }
+
+      const response = await fetchWithRetry(`${API_URL}/user/profile`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
+        throw new Error('Server error while fetching profile');
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Failed to fetch user profile:', data);
+        throw new Error(data.message || 'Failed to fetch user profile');
+      }
+
+      console.log('✅ User profile fetched successfully');
+      return data.data || data;
+    } catch (error) {
+      console.error('❌ Get Current User Error:', error.message);
+      throw error;
+    }
+  },
+
+  async updateProfile(updateData) {
+    try {
+      const token = await this.getToken();
+      if (!token) {
+        throw new Error('No token found. Please login first.');
+      }
+
+      console.log('📝 Updating profile with:', updateData);
+
+      const response = await fetchWithRetry(`${API_URL}/user/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
+        throw new Error('Server error while updating profile');
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Failed to update profile:', data);
+        throw new Error(data.message || 'Failed to update profile');
+      }
+
+      console.log('✅ Profile updated successfully');
+      return data.data || data;
+    } catch (error) {
+      console.error('❌ Update Profile Error:', error.message);
+      throw error;
+    }
+  },
+
   // Helper function để test connection
   async testConnection() {
     try {

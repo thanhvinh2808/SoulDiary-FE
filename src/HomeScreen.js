@@ -13,12 +13,14 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 import { diaryService } from './services/diaryService';
 
 const HomeScreen = ({ onNavigate }) => {
   const isDark = false; // Luôn dùng Light Mode
+  const insets = useSafeAreaInsets();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentDiaryId, setCurrentDiaryId] = useState(null);
@@ -147,17 +149,22 @@ const HomeScreen = ({ onNavigate }) => {
   return (
     <View style={[styles.container, themeStyles.container]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         
         {/* Top App Bar */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <TouchableOpacity style={styles.iconButton}>
                  <MaterialIcons name="menu" size={28} color={isDark ? '#FFF' : '#111811'} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, themeStyles.textPrimary]}>SoulDiary</Text>
-            <TouchableOpacity style={styles.iconButton} onPress={fetchData}>
-                 <MaterialIcons name="refresh" size={28} color={isDark ? '#FFF' : '#111811'} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity style={styles.iconButton} onPress={fetchData}>
+                   <MaterialIcons name="refresh" size={28} color={isDark ? '#FFF' : '#111811'} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconButton} onPress={() => onNavigate('Profile')}>
+                   <MaterialIcons name="person" size={28} color={isDark ? '#FFF' : '#111811'} />
+              </TouchableOpacity>
+            </View>
         </View>
 
         <ScrollView 

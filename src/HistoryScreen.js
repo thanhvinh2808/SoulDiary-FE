@@ -12,6 +12,7 @@ import {
   Image,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 
@@ -72,7 +73,8 @@ const DATA = [
 
 const HistoryScreen = ({ onNavigate }) => {
   // FORCE LIGHT MODE
-  const isDark = false; 
+  const isDark = false;
+  const insets = useSafeAreaInsets(); 
 
   const themeStyles = {
     container: { backgroundColor: COLORS.backgroundLight },
@@ -128,10 +130,10 @@ const HistoryScreen = ({ onNavigate }) => {
   return (
     <View style={[styles.container, themeStyles.container]}>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <View style={styles.headerTop}>
                 <TouchableOpacity style={styles.iconButton}>
                     <MaterialIcons name="menu" size={24} color="#57534E" />

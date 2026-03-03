@@ -10,6 +10,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { COLORS } from './theme';
@@ -26,15 +27,16 @@ const ANALYTICS_COLORS = {
 };
 
 const AnalyticsScreen = ({ onNavigate }) => {
+  const insets = useSafeAreaInsets();
   const [timeframe, setTimeframe] = useState('7days');
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <TouchableOpacity style={styles.backButton} onPress={() => onNavigate('Home')}>
                 <MaterialIcons name="arrow-back-ios" size={20} color={ANALYTICS_COLORS.textDark} />
             </TouchableOpacity>

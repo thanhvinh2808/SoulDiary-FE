@@ -13,6 +13,7 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 import { diaryService } from './services/diaryService';
@@ -26,6 +27,7 @@ const MOODS = [
 ];
 
 const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
+  const insets = useSafeAreaInsets();
   const [selectedMood, setSelectedMood] = useState('happy');
   const [entryText, setEntryText] = useState('');
   const [title, setTitle] = useState(''); // Thêm title state
@@ -102,10 +104,10 @@ const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
   return (
     <View style={[styles.container, themeStyles.container]}>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: 0 }]} edges={['left', 'right', 'bottom']}>
         
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <TouchableOpacity style={styles.closeButton} onPress={onClose} disabled={loading}>
                 <MaterialIcons name="close" size={24} color={COLORS.textGray} />
             </TouchableOpacity>
