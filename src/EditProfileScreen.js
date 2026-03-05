@@ -33,8 +33,8 @@ const EditProfileScreen = ({ onNavigate, params }) => {
 
   const [formData, setFormData] = useState({
     name: '',
-    username: '',
     email: '',
+    phone: '',
     bio: '',
     profileImage: ''
   });
@@ -47,10 +47,10 @@ const EditProfileScreen = ({ onNavigate, params }) => {
     if (initialUser) {
       setFormData({
         name: initialUser.name || '',
-        username: initialUser.username || '',
         email: initialUser.email || '',
+        phone: initialUser.phone || '',
         bio: initialUser.bio || '',
-        profileImage: initialUser.profileImage || ''
+        profileImage: initialUser.profileImage || initialUser.photo || ''
       });
     }
   }, [initialUser]);
@@ -62,14 +62,6 @@ const EditProfileScreen = ({ onNavigate, params }) => {
       newErrors.name = 'Name is required';
     } else if (formData.name.trim().length < 2) {
       newErrors.name = 'Name must be at least 2 characters';
-    }
-
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
-    } else if (formData.username.trim().length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
-    } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
-      newErrors.username = 'Username can only contain letters, numbers, _, and -';
     }
 
     if (!formData.email.trim()) {
@@ -98,9 +90,8 @@ const EditProfileScreen = ({ onNavigate, params }) => {
       setSaving(true);
       const updateData = {
         name: formData.name.trim(),
-        username: formData.username.trim(),
         bio: formData.bio.trim(),
-        email: formData.email.trim(),
+        phone: formData.phone.trim(),
       };
 
       if (formData.profileImage) {
@@ -195,27 +186,26 @@ const EditProfileScreen = ({ onNavigate, params }) => {
                 <Text style={styles.charCount}>{formData.name.length}/50</Text>
               </View>
 
-              {/* Username Field */}
+              {/* Phone Field */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Username *</Text>
-                <View style={[styles.inputWrapper, errors.username && styles.inputError]}>
-                  <Text style={styles.atSymbol}>@</Text>
+                <Text style={styles.label}>Phone</Text>
+                <View style={[styles.inputWrapper, errors.phone && styles.inputError]}>
+                  <MaterialIcons name="phone" size={18} color={COLORS.primary} />
                   <TextInput
                     style={styles.input}
-                    placeholder="username"
+                    placeholder="Your phone number"
                     placeholderTextColor={COLORS.textLightGray}
-                    value={formData.username}
-                    onChangeText={(text) => handleInputChange('username', text.toLowerCase())}
-                    maxLength={30}
+                    value={formData.phone}
+                    onChangeText={(text) => handleInputChange('phone', text)}
+                    keyboardType="phone-pad"
                   />
                 </View>
-                {errors.username && <Text style={styles.errorMessage}>{errors.username}</Text>}
-                <Text style={styles.charCount}>{formData.username.length}/30</Text>
+                {errors.phone && <Text style={styles.errorMessage}>{errors.phone}</Text>}
               </View>
 
               {/* Email Field */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Email *</Text>
+                <Text style={styles.label}>Email</Text>
                 <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
                   <MaterialIcons name="mail-outline" size={18} color={COLORS.primary} />
                   <TextInput

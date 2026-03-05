@@ -298,7 +298,7 @@ export const authService = {
         throw new Error('No token found. Please login first.');
       }
 
-      const response = await fetchWithRetry(`${API_URL}/user/profile`, {
+      const response = await fetchWithRetry(`${API_URL}/users/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -321,7 +321,13 @@ export const authService = {
       }
 
       console.log('✅ User profile fetched successfully');
-      return data.data || data;
+      // Backend returns { status, data: { user: {...} } }
+      const user = data.data?.user || data.user;
+      return {
+        ...user,
+        // Map 'photo' to 'profileImage' for frontend consistency
+        profileImage: user?.photo || user?.profileImage,
+      };
     } catch (error) {
       console.error('❌ Get Current User Error:', error.message);
       throw error;
@@ -335,15 +341,30 @@ export const authService = {
         throw new Error('No token found. Please login first.');
       }
 
-      console.log('📝 Updating profile with:', updateData);
+      // Map frontend field names to backend field names
+      const mappedData = {};
+      const allowedFields = ['name', 'phone', 'dateOfBirth', 'address', 'bio', 'photo'];
+      
+      for (const field of allowedFields) {
+        if (updateData[field] !== undefined) {
+          mappedData[field] = updateData[field];
+        }
+      }
+      
+      // Map 'profileImage' to 'photo' for backend
+      if (updateData.profileImage !== undefined) {
+        mappedData.photo = updateData.profileImage;
+      }
 
-      const response = await fetchWithRetry(`${API_URL}/user/profile`, {
-        method: 'PUT',
+      console.log('📝 Updating profile with:', mappedData);
+
+      const response = await fetchWithRetry(`${API_URL}/users/me`, {
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updateData),
+        body: JSON.stringify(mappedData),
       });
 
       const contentType = response.headers.get('content-type');
@@ -361,7 +382,11 @@ export const authService = {
       }
 
       console.log('✅ Profile updated successfully');
-      return data.data || data;
+      const user = data.data?.user || data.user;
+      return {
+        ...user,
+        profileImage: user?.photo || user?.profileImage,
+      };
     } catch (error) {
       console.error('❌ Update Profile Error:', error.message);
       throw error;
