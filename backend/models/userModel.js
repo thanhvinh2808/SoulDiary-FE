@@ -8,6 +8,25 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    username: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      sparse: true,
+      unique: true,
+      validate: {
+        validator: function (v) {
+          return /^[a-z0-9_-]{3,30}$/.test(v);
+        },
+        message: "Username must be 3-30 characters, only lowercase letters, numbers, _, and -",
+      },
+    },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: 160,
+      default: null,
+    },
     email: {
       type: String,
       sparse: true, // Allow multiple nulls but unique if present
@@ -16,6 +35,10 @@ const userSchema = new mongoose.Schema(
       validate: [validator.isEmail, "Email không hợp lệ"],
     },
     photo: {
+      type: String,
+      default: null,
+    },
+    profileImage: {
       type: String,
       default: null,
     },

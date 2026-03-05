@@ -150,7 +150,9 @@ const ProfileScreen = ({ onNavigate }) => {
           {/* User Info */}
           <View style={styles.userInfoSection}>
             <Text style={styles.userName}>{user.name || 'User'}</Text>
-            <Text style={styles.userHandle}>@{user.username || 'username'}</Text>
+            {user.phone && (
+              <Text style={styles.userHandle}>{user.phone}</Text>
+            )}
             {user.bio && (
               <Text style={styles.userBio}>{user.bio}</Text>
             )}
