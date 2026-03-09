@@ -25,7 +25,9 @@ const MOOD_MAP = {
   sad: { icon: 'sentiment-very-dissatisfied', color: '#3b82f6', bg: '#dbeafe' },
   neutral: { icon: 'sentiment-neutral', color: '#f59e0b', bg: '#fef3c7' },
   angry: { icon: 'sentiment-very-dissatisfied', color: '#ef4444', bg: '#fee2e2' },
-  anxious: { icon: 'sentiment-worried', color: '#d946ef', bg: '#f3e8ff' },
+  anxious: { icon: 'sentiment-dissatisfied', color: '#d946ef', bg: '#f3e8ff' },
+  excited: { icon: 'sentiment-very-satisfied', color: '#ec4899', bg: '#fce7f3' },
+  tired: { icon: 'bedtime', color: '#6366f1', bg: '#e0e7ff' },
 };
 
 // Dummy fallback data (in case API fails)
