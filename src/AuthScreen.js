@@ -188,7 +188,6 @@ const AuthScreen = ({ onLoginSuccess }) => {
         setRegistrationEmail(emailInput);
         setOtpModalSource('auto');
         setShowOtpModal(true);
-        Alert.alert('Success', 'Account created! Please check your email for OTP code.');
       } else {
         const responseData = await authService.login(emailInput, passwordInput);
         onLoginSuccess(responseData.data?.user || responseData.user);
