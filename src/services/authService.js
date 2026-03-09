@@ -193,7 +193,7 @@ export const authService = {
       console.log('📍 API URL:', `${API_URL}/auth/google`);
       console.log('🔑 Token preview:', token.substring(0, 20) + '...');
       
-      const response = await fetchWithRetry(`${API_URL}/auth?action=google`, {
+      const response = await fetchWithRetry(`${API_URL}/auth/google`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -244,7 +244,7 @@ export const authService = {
       console.log('📍 API URL:', `${API_URL}/auth/facebook`);
       console.log('🔑 Token preview:', accessToken.substring(0, 20) + '...');
       
-      const response = await fetchWithRetry(`${API_URL}/auth?action=facebook`, {
+      const response = await fetchWithRetry(`${API_URL}/auth/facebook`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

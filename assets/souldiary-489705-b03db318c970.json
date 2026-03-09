@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "souldiary-489705",
+  "private_key_id": "b03db318c97027e06b52417d15e46e93f2c5431b",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCnPY5H4tQyC3Ub\nXIAjud6ov3UvgfLwkFfzXhS5jKY6K0qpTqWexGcyYpEe4fZPWzaIPNNXJyV67fGi\nK/tdC5wHhcdu0rHSakrWfk4BiOfPXtuFq2vRtSRGy5YRuV+AtPbPC0DdLw76xzXa\nzFlCwP/6yoHvzogPVENfcZl2l9pQBmtckB02uFUAVimENLVzHsIqLoiuphCgwSxF\n6rJBve5bae4lvo5YzyVsRF3/hAdqc0KwQnOpxN9hor4vze1FpGR4vFNOTDSI5BCy\n1/ay1wDGgHzwhK3F9IHx8sCx6910VMLv2zaFAVv/odn11VRGcYflVzQj6vuxNGx0\n4I5SdUA7AgMBAAECggEARvSVcMd6yy7URUMWNNIv932fvQPP7KP5RM6mUWEsx6JF\nf5bYKwfeVuC9/JHXXKzw8pWH/0KjIshgjDNH5x69WO24AzuOaZ1iWiXld747x95R\nmiF0UdmeZhELf0Kck/Fzg72dDBriqqCpp0arGmjjUmboATQpwwM3wH9koo3j+K5I\nmLi8WQHDWy/CXaP8l8jTpoz0MeqWBSvBAzXSbLpAczI3iw4Mox/JLhPzhd26ZiUT\nz4Z6G2sdn9xiu6oRuQjW3oKdfEndnooYnOdyXc7Em43NhtkTjFrO9HGDogcTQGPu\nI5VjXOUvkvRsH36OTfUUlwwfwb3UnmWxwCZ3KIGNFQKBgQDdHDKxamBVOgOTXGH9\n6lDQGRjYKE7zawFAxBNvg4AXcSSY2CGDe3Q3hfr9zwahttDVVUwpSNX7DlDjrh5d\nkwOTNFcMZosKF82SnZoh5QmV4Q99sIs0OL+yPZ0XloJcmnNLfrnfmn3ivMNK8Oq/\nYk2Uex4EETHkTnOcj7k9lF1ovwKBgQDBoUcBp77i8av79MlYyzbFM/yd/PCZ+BbS\nRF0oowLDKr/LoGn/hANUCoq2ANCM/jEDcsu9c3EAjcO1bifFZm/IaV7MzjF2TVmB\n6uh2lWstU8y27wEW/RtxmD2FBUW90tJw1ytIiqgJ741njhK60YoEYcUCQuM8oA3I\nxmyBoFprhQKBgBKRy7AavvxpYuN9Xr10cFUJxoxg1kCbO/+0d+1lndxaJDix7h6c\nv6XqGqo2ONhcAi3oe/z7oPz0ttZoSSSStDooqybfdc3jMeCeW9N86NEtlZ94tDgu\ni+rsQcU5XrloP0aX3gRpdSkVsVEZ6p0oJFvT+zFcQFRsQkljyKrjSvUBAoGAbRhu\nRmt57KoXqZ0Q+Nt+X3vcADPsaAPU7+Gez2+Q9d+XMqaOMm3x5h8Oal9pIZdyjCvY\nyURKzfIR655GAD2oC7X6uNAQJESOgtmU4oNrYJ2PgR6GcapoFQee2dzPn5UyBmvl\nMjkVVovHEyqEOQgoiDGB67U+DQFs4suRhTOQ3nUCgYANaN126Q+YlZwvDc34L0qG\nR9vALBGZtWbSPoxTmQL+BToCkj7j7g9DRZ/FXQwC8YKk/vuCVMc3YSGuU1hUU2w+\ns362ZONVuJD103TyNrsZeA1bM784n80dxzGVQtuG6Hd0OM+JoVJFU8knMKKrC9wu\n5Jq1pW9khgSkpQ6NtUJPVA==\n-----END PRIVATE KEY-----\n",
+  "client_email": "souldiary@souldiary-489705.iam.gserviceaccount.com",
+  "client_id": "102261015376125316398",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/souldiary%40souldiary-489705.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
