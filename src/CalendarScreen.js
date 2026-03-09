@@ -24,14 +24,18 @@ const MOOD_COLORS = {
     neutral: '#6EE7B7', // Emerald-300
     angry: '#FCA5A1', // Red-300
     anxious: '#E879F9', // Purple-300
+    excited: '#F472B6', // Pink-300
+    tired: '#A5B4FC', // Indigo-300
 };
 
 const MOOD_ICONS = {
-    happy: 'sentiment-satisfied',
-    sad: 'sentiment-dissatisfied',
+    happy: 'sentiment-very-satisfied',
+    sad: 'sentiment-very-dissatisfied',
     neutral: 'sentiment-neutral',
     angry: 'sentiment-very-dissatisfied',
-    anxious: 'mood-bad',
+    anxious: 'sentiment-dissatisfied',
+    excited: 'sentiment-very-satisfied',
+    tired: 'bedtime',
 };
 
 const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...props }) => {
