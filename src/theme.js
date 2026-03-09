@@ -1,25 +1,34 @@
 export const COLORS = {
-  primary: '#19e619', 
-  
-  // Backgrounds - Đã cập nhật theo yêu cầu của bạn
-  backgroundLight: '#FDFBF7', // Cozy cream/beige chuẩn
+
+  // Brand
+  primary: '#19E619',
+
+  // Backgrounds
+  backgroundLight: '#FDFBF7',   // Cozy cream journal paper
   backgroundDark: '#112111',
-  
+
+  // Surfaces
+  cardLight: '#FFFFFF',
+  cardDark: 'rgba(255,255,255,0.05)',
+
   // Text
-  textMain: '#111811', // Hoặc '#2D342D' tùy bạn chọn, tôi giữ theo thiết kế Home gần nhất
+  textPrimary: '#111811',
+  textSecondary: '#638863',
+  textMuted: '#A8BAA8',
   textWhite: '#FFFFFF',
-  textGray: '#638863',
-  textLightGray: '#A8BAA8',
-  
-  // Accents & Borders
-  beigeAccent: '#F2EDE4',
-  borderLight: '#eeebe4',
-  borderDark: 'rgba(255, 255, 255, 0.1)',
-  cardBgDark: 'rgba(255, 255, 255, 0.05)',
-  
-  // Additional
-  softCream: '#FDFBF7',
-  moodHappy: '#19e619',
-  moodNeutral: '#9CA3AF',
-  moodSad: '#4B5563',
+
+  // Borders
+  borderLight: '#EEEBE4',
+  borderDark: 'rgba(255,255,255,0.1)',
+
+  // Accent
+  accentBeige: '#F2EDE4',
+
+  // Mood Colors (important for journaling)
+  mood: {
+    happy: '#19E619',
+    neutral: '#9CA3AF',
+    sad: '#4B5563'
+  }
+
 };
