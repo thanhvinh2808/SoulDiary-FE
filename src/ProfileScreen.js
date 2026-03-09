@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 import { authService } from './services/authService';
+import { diaryService } from './services/diaryService';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 375;
@@ -30,8 +31,8 @@ const ProfileScreen = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     entries: 0,
-    insights: 0,
-    streaks: 0
+    streaks: 0,
+    bestStreak: 0
   });
 
   useEffect(() => {
@@ -42,15 +43,28 @@ const ProfileScreen = ({ onNavigate }) => {
     try {
       setLoading(true);
       const currentUser = await authService.getCurrentUser();
+      
       if (currentUser) {
         setUser(currentUser);
-        // Calculate stats based on user data
-        const entriesCount = currentUser.entriesCount || 0;
-        setStats({
-          entries: entriesCount,
-          insights: Math.floor(entriesCount * 0.3),
-          streaks: calculateStreak(currentUser.createdAt)
-        });
+        
+        // Fetch actual entries to count and calculate streak
+        try {
+          const entries = await diaryService.getEntries();
+          const entryCount = Array.isArray(entries) ? entries.length : 0;
+          const streak = calculateStreakFromEntries(entries);
+          const bestStreak = calculateBestStreak(entries);
+          
+          console.log('📊 Calculated stats:', { entryCount, streak, bestStreak });
+          
+          setStats({
+            entries: entryCount,
+            streaks: streak,
+            bestStreak: bestStreak
+          });
+        } catch (error) {
+          console.error('Failed to fetch entries for stats:', error);
+          setStats({ entries: 0, streaks: 0, bestStreak: 0 });
+        }
       }
     } catch (error) {
       console.error('Failed to load user profile:', error);
@@ -60,12 +74,100 @@ const ProfileScreen = ({ onNavigate }) => {
     }
   };
 
-  const calculateStreak = (createdAt) => {
-    if (!createdAt) return 0;
-    const created = new Date(createdAt);
+  // Calculate current streak: consecutive days with entries ending today
+  const calculateStreakFromEntries = (entries) => {
+    if (!Array.isArray(entries) || entries.length === 0) return 0;
+    
+    console.log('📈 Calculating streak from', entries.length, 'entries');
+    
+    // Get all unique dates with entries
+    const entryDates = new Set();
+    entries.forEach(entry => {
+      const dateStr = entry.entryDate || entry.createdAt || entry.date;
+      if (dateStr) {
+        const date = new Date(dateStr);
+        // Normalize date to YYYY-MM-DD
+        const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        entryDates.add(normalized.getTime());
+      }
+    });
+    
+    if (entryDates.size === 0) return 0;
+    
+    // Sort dates descending (most recent first)
+    const dates = Array.from(entryDates).sort((a, b) => b - a);
+    
+    // Check if most recent date is today or yesterday
     const today = new Date();
-    const days = Math.floor((today - created) / (1000 * 60 * 60 * 24));
-    return Math.min(days, 365);
+    const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const lastEntryTime = dates[0];
+    const daysDiff = Math.floor((todayNormalized - lastEntryTime) / (1000 * 60 * 60 * 24));
+    
+    console.log('🔍 Last entry:', new Date(lastEntryTime), 'Days diff:', daysDiff);
+    
+    // If no entry today or yesterday, streak is 0
+    if (daysDiff > 1) {
+      console.log('❌ Streak broken - last entry not today or yesterday');
+      return 0;
+    }
+    
+    // Count consecutive days backwards from today
+    let streak = 0;
+    let checkDate = lastEntryTime;
+    
+    for (const entryTime of dates) {
+      if (entryTime === checkDate) {
+        streak++;
+        checkDate -= 1000 * 60 * 60 * 24; // Go back one day
+      } else {
+        break; // Streak broken
+      }
+    }
+    
+    console.log('✅ Current streak:', streak);
+    return streak;
+  };
+
+  // Calculate best streak ever
+  const calculateBestStreak = (entries) => {
+    if (!Array.isArray(entries) || entries.length === 0) return 0;
+    
+    // Get all unique dates with entries
+    const entryDates = new Map();
+    entries.forEach(entry => {
+      const dateStr = entry.entryDate || entry.createdAt || entry.date;
+      if (dateStr) {
+        const date = new Date(dateStr);
+        const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const timeKey = normalized.getTime();
+        if (!entryDates.has(timeKey)) {
+          entryDates.set(timeKey, true);
+        }
+      }
+    });
+    
+    if (entryDates.size === 0) return 0;
+    
+    // Sort dates ascending
+    const dates = Array.from(entryDates.keys()).sort((a, b) => a - b);
+    
+    // Find longest consecutive streak
+    let maxStreak = 1;
+    let currentStreak = 1;
+    
+    for (let i = 1; i < dates.length; i++) {
+      const diff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24);
+      if (Math.abs(diff - 1) < 0.5) {
+        currentStreak++;
+      } else {
+        maxStreak = Math.max(maxStreak, currentStreak);
+        currentStreak = 1;
+      }
+    }
+    
+    const best = Math.max(maxStreak, currentStreak);
+    console.log('🏆 Best streak ever:', best);
+    return best;
   };
 
   const handleLogout = () => {
@@ -121,9 +223,14 @@ const ProfileScreen = ({ onNavigate }) => {
                 <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>My Profile</Text>
-              <TouchableOpacity onPress={() => onNavigate('EditProfile', { user })}>
-                <MaterialIcons name="edit" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity onPress={loadUserProfile}>
+                  <MaterialIcons name="refresh" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => onNavigate('EditProfile', { user })}>
+                  <MaterialIcons name="edit" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Profile Picture */}
@@ -150,13 +257,28 @@ const ProfileScreen = ({ onNavigate }) => {
           {/* User Info */}
           <View style={styles.userInfoSection}>
             <Text style={styles.userName}>{user.name || 'User'}</Text>
-            {user.phone && (
-              <Text style={styles.userHandle}>{user.phone}</Text>
-            )}
-            {user.bio && (
-              <Text style={styles.userBio}>{user.bio}</Text>
-            )}
             <Text style={styles.userEmail}>{user.email}</Text>
+            {user.phone ? (
+              <Text style={styles.userHandle}>📱 {user.phone}</Text>
+            ) : (
+              <Text style={styles.userPlaceholder}>No phone number added</Text>
+            )}
+            {user.bio ? (
+              <Text style={styles.userBio}>{user.bio}</Text>
+            ) : (
+              <Text style={styles.userPlaceholder}>No bio added yet</Text>
+            )}
+            {user.createdAt && (
+              <Text style={styles.userMemberSince}>
+                Member since {new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+              </Text>
+            )}
+            {user.isVerified && (
+              <View style={styles.verificationBadge}>
+                <MaterialIcons name="verified" size={14} color={COLORS.primary} />
+                <Text style={styles.verificationText}>Verified</Text>
+              </View>
+            )}
           </View>
 
           {/* Stats Grid */}
@@ -166,12 +288,12 @@ const ProfileScreen = ({ onNavigate }) => {
               <Text style={styles.statLabel}>Entries</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.insights}</Text>
-              <Text style={styles.statLabel}>Insights</Text>
+              <Text style={styles.statValue}>{stats.streaks}</Text>
+              <Text style={styles.statLabel}>Current Streak</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.streaks}</Text>
-              <Text style={styles.statLabel}>Days Active</Text>
+              <Text style={styles.statValue}>{stats.bestStreak}</Text>
+              <Text style={styles.statLabel}>Best Streak</Text>
             </View>
           </View>
 
@@ -192,7 +314,7 @@ const ProfileScreen = ({ onNavigate }) => {
 
             <TouchableOpacity style={styles.settingItem}>
               <View style={styles.settingContent}>
-                <MaterialIcons name="notifications-outline" size={20} color={COLORS.primary} />
+                <MaterialIcons name="notifications" size={20} color={COLORS.primary} />
                 <Text style={styles.settingText}>Notifications</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={COLORS.textLightGray} />
@@ -309,6 +431,12 @@ const styles = StyleSheet.create({
     color: COLORS.textLightGray,
     marginBottom: isSmallScreen ? 8 : 12,
   },
+  userPlaceholder: {
+    fontSize: isSmallScreen ? 13 : 14,
+    color: COLORS.textLightGray,
+    fontStyle: 'italic',
+    marginBottom: isSmallScreen ? 8 : 12,
+  },
   userBio: {
     fontSize: isSmallScreen ? 12 : 14,
     color: COLORS.textGray,
@@ -320,6 +448,27 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: isSmallScreen ? 11 : 12,
     color: COLORS.textLightGray,
+    marginBottom: 8,
+  },
+  userMemberSince: {
+    fontSize: isSmallScreen ? 10 : 11,
+    color: COLORS.textGray,
+    marginTop: 4,
+  },
+  verificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(25, 230, 25, 0.1)',
+    borderRadius: 12,
+  },
+  verificationText: {
+    fontSize: 10,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   statsGrid: {
     flexDirection: 'row',

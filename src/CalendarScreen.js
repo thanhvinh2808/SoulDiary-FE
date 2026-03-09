@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,60 +8,356 @@ import {
   StatusBar,
   ScrollView,
   Platform,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
+import { diaryService } from './services/diaryService';
 
 const { width } = Dimensions.get('window');
-
-// Dummy Data for Calendar
-const CALENDAR_DATA = [
-    { day: 1, mood: 'calm' },
-    { day: 2, mood: null },
-    { day: 3, mood: 'happy' },
-    { day: 4, mood: null },
-    { day: 5, mood: 'calm', selected: true }, // Default selected
-    { day: 6, mood: 'anxious' },
-    { day: 7, mood: null },
-    { day: 8, mood: null },
-    { day: 9, mood: null },
-    { day: 10, mood: 'sad' },
-    { day: 11, mood: null },
-    { day: 12, mood: 'happy' },
-    { day: 13, mood: null },
-    { day: 14, mood: null },
-    { day: 15, mood: 'calm' },
-    { day: 16, mood: null },
-    { day: 17, mood: 'happy' },
-    { day: 18, mood: null },
-    { day: 19, mood: null },
-    { day: 20, mood: 'calm' },
-    { day: 21, mood: null },
-    { day: 22, mood: null },
-    { day: 23, mood: null },
-    { day: 24, mood: 'happy' },
-    { day: 25, mood: null },
-    { day: 26, mood: null },
-    { day: 27, mood: 'calm' },
-    { day: 28, mood: null },
-    { day: 29, mood: null },
-    { day: 30, mood: null },
-    { day: 31, mood: null },
-];
-
 const MOOD_COLORS = {
     happy: '#FCD34D', // Amber-300
     sad: '#93C5FD', // Blue-300
-    calm: '#6EE7B7', // Emerald-300
-    anxious: '#FCA5A1', // Red-300
+    neutral: '#6EE7B7', // Emerald-300
+    angry: '#FCA5A1', // Red-300
+    anxious: '#E879F9', // Purple-300
 };
 
-const CalendarScreen = ({ onNavigate }) => {
-  // FORCE LIGHT MODE
+const MOOD_ICONS = {
+    happy: 'sentiment-satisfied',
+    sad: 'sentiment-dissatisfied',
+    neutral: 'sentiment-neutral',
+    angry: 'sentiment-very-dissatisfied',
+    anxious: 'mood-bad',
+};
+
+const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...props }) => {
   const isDark = false;
-  const insets = useSafeAreaInsets(); 
+  const insets = useSafeAreaInsets();
+  // Handle diaryId from both route.params and direct props
+  const [diaryId, setDiaryId] = useState(props.route?.params?.diaryId || passedDiaryId);
+
+  // State Management
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedEntry, setSelectedEntry] = useState(null);
+  const [selectedDayEntries, setSelectedDayEntries] = useState([]); // All entries for selected day
+  const [entryIndex, setEntryIndex] = useState(0); // Which entry to display if multiple
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Helper function to normalize date to local YYYY-MM-DD
+  const getLocalDateString = (dateObj) => {
+    if (!dateObj) return null;
+    
+    let d = dateObj;
+    if (typeof dateObj === 'string') {
+      d = new Date(dateObj);
+    }
+    
+    if (!(d instanceof Date) || isNaN(d.getTime())) {
+      return null;
+    }
+    
+    // Use local time, not UTC
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  };
+
+  // Get month dates with mood mapping (now stores multiple entries per day)
+  const getMonthDates = useCallback((date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    
+    console.log(`\n📅 Building calendar for ${monthNames[month]} ${year}`);
+    console.log(`   Entries available: ${entries.length}`);
+    
+    // Create a map of date string to array of entries
+    const dateToEntries = {};
+    let successCount = 0;
+    let failCount = 0;
+    
+    entries.forEach((entry, idx) => {
+      // Try multiple date field names in order of preference
+      let dateField = entry.entryDate || entry.date || entry.createdAt;
+      
+      if (!dateField) {
+        if (idx < 3) {
+          console.warn(`   ⚠️ Entry ${idx}: No date field found (all null/undefined)`);
+        }
+        failCount++;
+        return;
+      }
+      
+      try {
+        // Use helper to parse and normalize date
+        const dateStr = getLocalDateString(dateField);
+        
+        if (!dateStr) {
+          console.warn(`   ⚠️ Entry ${idx}: Could not parse date from "${dateField}"`);
+          failCount++;
+          return;
+        }
+        
+        // Initialize array if first entry for this date
+        if (!dateToEntries[dateStr]) {
+          dateToEntries[dateStr] = [];
+        }
+        
+        // Add entry to the array for this date
+        dateToEntries[dateStr].push(entry);
+        
+        // Log first few successful mappings
+        if (successCount < 5) {
+          console.log(`   ✅ Entry ${idx}: "${entry.title?.substring(0, 20)}" → ${dateStr} (${entry.mood})`);
+        }
+        
+        successCount++;
+        
+      } catch (e) {
+        console.error(`   ❌ Entry ${idx}: Error processing - ${e.message}`);
+        failCount++;
+      }
+    });
+    
+    console.log(`   📊 Mapping summary: ${successCount} mapped, ${failCount} failed`);
+    console.log(`   🗓️ Unique dates with entries: ${Object.keys(dateToEntries).length}`);
+    
+    // Log sample of mapped dates with entry counts
+    const sampleDates = Object.keys(dateToEntries).slice(0, 5);
+    if (sampleDates.length > 0) {
+      console.log(`   Sample mapped dates:`);
+      sampleDates.forEach(dateStr => {
+        console.log(`      ${dateStr}: ${dateToEntries[dateStr].length} entry/entries`);
+      });
+    }
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    const weeks = [];
+    let week = Array(startingDayOfWeek).fill(null);
+    let daysWithEntries = 0;
+
+    // Debug: collect calendar dates to compare
+    const calendarDates = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      // Use consistent date string generation
+      const dateStr = getLocalDateString(new Date(year, month, day));
+      const dayEntries = dateToEntries[dateStr] || [];
+      
+      if (day <= 3) {
+        calendarDates.push(dateStr);
+      }
+      
+      if (dayEntries.length > 0) {
+        daysWithEntries++;
+      }
+      
+      // Use the most recent (last) entry for mood indicator
+      const latestEntry = dayEntries.length > 0 ? dayEntries[dayEntries.length - 1] : null;
+      
+      week.push({
+        day,
+        mood: latestEntry?.mood || null,
+        hasEntry: dayEntries.length > 0,
+        entries: dayEntries, // All entries for this day
+        date: new Date(year, month, day),
+      });
+
+      if (week.length === 7) {
+        weeks.push(week);
+        week = [];
+      }
+    }
+
+    // Fill remaining cells
+    if (week.length > 0) {
+      while (week.length < 7) {
+        week.push(null);
+      }
+      weeks.push(week);
+    }
+
+    // Debug output showing calendar date format and matches
+    if (calendarDates.length > 0) {
+      console.log(`   Calendar dates generated: ${calendarDates.join(', ')}`);
+    }
+    console.log(`   🎯 Calendar ready with ${daysWithEntries} days showing entries\n`);
+    return weeks;
+  }, [entries]);
+
+  // Load entries
+  const loadEntries = useCallback(async (targetDiaryId) => {
+    try {
+      setLoading(true);
+      const finalDiaryId = targetDiaryId || diaryId;
+      
+      console.log('📥 CalendarScreen loadEntries called with diaryId:', finalDiaryId);
+      
+      // If still no diaryId, fetch default diary
+      if (!finalDiaryId) {
+        console.log('⚠️ No diaryId provided in CalendarScreen, fetching default diary...');
+        const diaries = await diaryService.getDiaries();
+        console.log('📚 Fetched diaries:', diaries?.length || 0);
+        
+        if (diaries && diaries.length > 0) {
+          const defaultId = diaries[0].id || diaries[0]._id;
+          console.log('✅ Using default diary ID:', defaultId);
+          setDiaryId(defaultId);
+          
+          const data = await diaryService.getEntries(defaultId);
+          console.log('📝 Fetched entries for default diary:', data?.length || 0, 'entries');
+          
+          if (data && data.length > 0) {
+            console.log('🔍 Detailed entry analysis:');
+            data.slice(0, 5).forEach((entry, idx) => {
+              console.log(`   Entry ${idx}:`);
+              console.log(`      Title: ${entry.title?.substring(0, 30)}`);
+              console.log(`      Mood: ${entry.mood}`);
+              console.log(`      entryDate: ${entry.entryDate}`);
+              console.log(`      date: ${entry.date}`);
+              console.log(`      createdAt: ${entry.createdAt}`);
+            });
+          }
+          
+          setEntries(data || []);
+          return;
+        } else {
+          console.error('❌ No diaries found');
+          setEntries([]);
+          return;
+        }
+      }
+      
+      // Fetch entries for the specified diary
+      console.log('🔄 Fetching entries for diary:', finalDiaryId);
+      const data = await diaryService.getEntries(finalDiaryId);
+      
+      console.log('✅ Entries fetched successfully:');
+      console.log('   Total count:', data?.length || 0);
+      console.log('   Array type:', Array.isArray(data) ? 'Array' : typeof data);
+      
+      if (data && data.length > 0) {
+        console.log('🔍 Detailed entry analysis (first 5):');
+        data.slice(0, 5).forEach((entry, idx) => {
+          const dateField = entry.entryDate || entry.date || entry.createdAt;
+          console.log(`   [${idx}] "${entry.title?.substring(0, 25)}" → ${dateField} (Mood: ${entry.mood})`);
+        });
+        console.log(`   ... and ${Math.max(0, data.length - 5)} more entries`);
+      } else {
+        console.warn('⚠️ No entries returned from API');
+      }
+      
+      setEntries(data || []);
+    } catch (error) {
+      console.error('📥 Error loading entries:', error);
+      console.error('   Error details:', error.message);
+      Alert.alert('Error', 'Failed to load calendar entries');
+    } finally {
+      setLoading(false);
+    }
+  }, [diaryId]);
+
+  useEffect(() => {
+    loadEntries(diaryId);
+  }, [diaryId, loadEntries]);
+
+  // Auto-select today's entries when calendar loads
+  useEffect(() => {
+    if (entries.length > 0 && !selectedEntry) {
+      const today = new Date();
+      const todayStr = getLocalDateString(today);
+      
+      // Find today in the month dates
+      const monthDates = getMonthDates(currentDate);
+      
+      for (const week of monthDates) {
+        for (const dayObj of week) {
+          if (dayObj && dayObj.day === today.getDate() && 
+              dayObj.date.getMonth() === today.getMonth() &&
+              dayObj.date.getFullYear() === today.getFullYear()) {
+            
+            if (dayObj.entries && dayObj.entries.length > 0) {
+              console.log(`📌 Auto-selecting today (${todayStr}) with ${dayObj.entries.length} entry/entries`);
+              setSelectedDate(dayObj.date);
+              setEntryIndex(0);
+              setSelectedDayEntries(dayObj.entries);
+              setSelectedEntry(dayObj.entries[0]);
+              return;
+            }
+          }
+        }
+      }
+    }
+  }, [entries, currentDate]);
+  
+  const monthDates = getMonthDates(currentDate);
+  const selectedEntryData = selectedEntry;
+
+  const handlePreviousMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const handleToday = () => {
+    setCurrentDate(new Date());
+    setSelectedDate(new Date());
+  };
+
+  const handleDayPress = (dayObj) => {
+    if (dayObj) {
+      setSelectedDate(dayObj.date);
+      setEntryIndex(0); // Reset to first entry
+      
+      if (dayObj.entries && dayObj.entries.length > 0) {
+        setSelectedDayEntries(dayObj.entries);
+        setSelectedEntry(dayObj.entries[0]); // Show first entry
+      } else {
+        setSelectedDayEntries([]);
+        setSelectedEntry(null); // Clear previous entry if day has no entry
+      }
+    }
+  };
+
+  // Navigation helpers for multiple entries
+  const handlePreviousEntry = () => {
+    if (entryIndex > 0) {
+      setEntryIndex(entryIndex - 1);
+      setSelectedEntry(selectedDayEntries[entryIndex - 1]);
+    }
+  };
+
+  const handleNextEntry = () => {
+    if (entryIndex < selectedDayEntries.length - 1) {
+      setEntryIndex(entryIndex + 1);
+      setSelectedEntry(selectedDayEntries[entryIndex + 1]);
+    }
+  };
+
+  const handleEditEntry = () => {
+    if (selectedEntry) {
+      onNavigate('NewEntry', { 
+        entryId: selectedEntry._id || selectedEntry.id,
+        diaryId 
+      });
+    }
+  };
 
   const themeStyles = {
     container: { backgroundColor: COLORS.backgroundLight },
@@ -71,31 +367,33 @@ const CalendarScreen = ({ onNavigate }) => {
     navBg: { backgroundColor: 'rgba(255, 255, 255, 0.95)' },
   };
 
-  const renderDay = (item, index) => {
-      // Empty cells for start of month offset (simplified logic for demo)
-      if (!item) return <View key={index} style={styles.dayCell} />;
+  const renderDay = (dayObj, index) => {
+    if (!dayObj) return <View key={index} style={styles.dayCell} />;
 
-      return (
-        <TouchableOpacity 
-            key={index} 
-            style={[
-                styles.dayCell,
-                item.selected && styles.dayCellSelected
-            ]}
-        >
-            <Text style={[
-                styles.dayText,
-                item.selected && styles.dayTextSelected
-            ]}>
-                {item.day}
-            </Text>
-            {item.mood && (
-                <View style={styles.moodDotsContainer}>
-                    <View style={[styles.moodDot, { backgroundColor: MOOD_COLORS[item.mood] }]} />
-                </View>
-            )}
-        </TouchableOpacity>
-      );
+    const isSelected = selectedDate.getDate() === dayObj.day && 
+                      selectedDate.getMonth() === currentDate.getMonth() &&
+                      selectedDate.getFullYear() === currentDate.getFullYear();
+
+    return (
+      <TouchableOpacity 
+        key={index}
+        style={[
+          styles.dayCell,
+          isSelected && styles.dayCellSelected
+        ]}
+        onPress={() => handleDayPress(dayObj)}
+      >
+        <Text style={[
+          styles.dayText,
+          isSelected && styles.dayTextSelected
+        ]}>
+          {dayObj.day}
+        </Text>
+        {dayObj.hasEntry && dayObj.mood && (
+          <View style={[styles.moodDot, { backgroundColor: MOOD_COLORS[dayObj.mood] || MOOD_COLORS.neutral }]} />
+        )}
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -105,105 +403,160 @@ const CalendarScreen = ({ onNavigate }) => {
         
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-            <TouchableOpacity style={styles.iconButton}>
-                <MaterialIcons name="chevron-left" size={28} color={COLORS.textMain} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>October 2023</Text>
-            <TouchableOpacity style={styles.todayButton}>
-                <Text style={styles.todayText}>Today</Text>
-            </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={handlePreviousMonth}>
+            <MaterialIcons name="chevron-left" size={28} color={COLORS.textMain} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+          </Text>
+          <TouchableOpacity style={styles.todayButton} onPress={handleToday}>
+            <Text style={styles.todayText}>Today</Text>
+          </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        {loading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.scrollContent}>
             
             {/* Calendar Grid */}
             <View style={styles.calendarContainer}>
-                {/* Weekday Headers */}
-                <View style={styles.weekRow}>
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                        <View key={i} style={styles.dayHeaderCell}>
-                            <Text style={styles.dayHeaderText}>{day}</Text>
-                        </View>
-                    ))}
-                </View>
+              {/* Weekday Headers */}
+              <View style={styles.weekRow}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                  <View key={i} style={styles.dayHeaderCell}>
+                    <Text style={styles.dayHeaderText}>{day}</Text>
+                  </View>
+                ))}
+              </View>
 
-                {/* Days Grid */}
-                <View style={styles.daysGrid}>
-                    {/* Add 2 empty cells for offset to match design */}
-                    {renderDay(null, 'empty1')}
-                    {renderDay(null, 'empty2')}
-                    {CALENDAR_DATA.map((item, index) => renderDay(item, index))}
-                </View>
+              {/* Days Grid */}
+              <View style={styles.daysGrid}>
+                {monthDates.map((week, weekIndex) => (
+                  week.map((day, dayIndex) => renderDay(day, `${weekIndex}-${dayIndex}`))
+                ))}
+              </View>
             </View>
 
             {/* Selected Date Header */}
             <View style={styles.dateHeader}>
-                <Text style={styles.dateTitle}>October 5, 2023</Text>
+              <Text style={styles.dateTitle}>
+                {monthNames[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()}
+              </Text>
             </View>
 
             {/* Entry Summary Card */}
-            <View style={styles.entrySummaryContainer}>
+            {selectedEntryData ? (
+              <View style={styles.entrySummaryContainer}>
                 <View style={styles.entryCard}>
-                    <View style={styles.entryHeader}>
-                        <View style={[styles.moodIconBg, { backgroundColor: 'rgba(110, 231, 183, 0.2)' }]}>
-                            <MaterialIcons name="sentiment-satisfied" size={24} color="#059669" />
-                        </View>
-                        <View>
-                            <Text style={styles.moodLabel}>MOOD: CALM</Text>
-                            <Text style={styles.timeLabel}>Logged at 8:30 PM</Text>
-                        </View>
+                  {/* Entry counter if multiple entries */}
+                  {selectedDayEntries.length > 1 && (
+                    <View style={styles.entryCounter}>
+                      <Text style={styles.entryCounterText}>
+                        Entry {entryIndex + 1} of {selectedDayEntries.length}
+                      </Text>
                     </View>
-                    
-                    <Text style={styles.entryTitle}>Feeling Peaceful</Text>
-                    <Text style={styles.entrySnippet}>
-                        Today was a quiet day. I spent some time in the garden and felt a deep sense of gratitude for the little things. The air was crisp and the sun felt warm...
-                    </Text>
+                  )}
+                  
+                  <View style={styles.entryHeader}>
+                    <View style={[
+                      styles.moodIconBg, 
+                      { backgroundColor: `${MOOD_COLORS[selectedEntryData.mood] || MOOD_COLORS.neutral}30` }
+                    ]}>
+                      <MaterialIcons 
+                        name={MOOD_ICONS[selectedEntryData.mood] || 'sentiment-satisfied'} 
+                        size={24} 
+                        color={MOOD_COLORS[selectedEntryData.mood] || MOOD_COLORS.neutral} 
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.moodLabel}>MOOD: {selectedEntryData.mood?.toUpperCase() || 'NEUTRAL'}</Text>
+                      <Text style={styles.timeLabel}>
+                        {new Date(selectedEntryData.createdAt).toLocaleString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <Text style={styles.entryTitle}>{selectedEntryData.title || 'Untitled'}</Text>
+                  <Text style={styles.entrySnippet} numberOfLines={3}>
+                    {selectedEntryData.content || 'No content'}
+                  </Text>
 
-                    <View style={styles.entryFooter}>
-                        <View style={styles.tagsContainer}>
-                             <View style={styles.miniTag}>
-                                <MaterialIcons name="eco" size={14} color="#57534E" />
-                             </View>
-                             <View style={styles.miniTag}>
-                                <MaterialIcons name="local-florist" size={14} color="#57534E" />
-                             </View>
-                        </View>
-                        <TouchableOpacity style={styles.readMoreButton}>
-                            <Text style={styles.readMoreText}>Read full entry</Text>
-                        </TouchableOpacity>
-                    </View>
+                  <View style={styles.entryFooter}>
+                    <TouchableOpacity 
+                      style={[styles.navButton, selectedDayEntries.length <= 1 || entryIndex === 0 ? { opacity: 0.3 } : {}]}
+                      onPress={handlePreviousEntry}
+                      disabled={entryIndex === 0}
+                    >
+                      <MaterialIcons name="chevron-left" size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity style={styles.readMoreButton} onPress={handleEditEntry}>
+                      <Text style={styles.readMoreText}>Edit entry</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.navButton, selectedDayEntries.length <= 1 || entryIndex === selectedDayEntries.length - 1 ? { opacity: 0.3 } : {}]}
+                      onPress={handleNextEntry}
+                      disabled={entryIndex === selectedDayEntries.length - 1}
+                    >
+                      <MaterialIcons name="chevron-right" size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-            </View>
+              </View>
+            ) : (
+              <View style={styles.entrySummaryContainer}>
+                <View style={[styles.entryCard, { alignItems: 'center', paddingVertical: 40 }]}>
+                  <MaterialIcons name="calendar-today" size={40} color="#D1D5DB" />
+                  <Text style={[styles.entryTitle, { marginTop: 16, color: '#9CA3AF' }]}>
+                    No entry found
+                  </Text>
+                  <Text style={[styles.entrySnippet, { color: '#9CA3AF', marginBottom: 0 }]}>
+                    Select a date with an entry or create a new one
+                  </Text>
+                </View>
+              </View>
+            )}
 
             <View style={{ height: 100 }} />
-        </ScrollView>
+          </ScrollView>
+        )}
 
         {/* FAB */}
         <TouchableOpacity 
-            style={styles.fab}
-            onPress={() => onNavigate('NewEntry')}
+          style={[styles.fab, !diaryId && { opacity: 0.5 }]}
+          onPress={() => onNavigate('NewEntry', { diaryId })}
+          disabled={!diaryId}
         >
-            <MaterialIcons name="add" size={32} color="#112111" />
+          <MaterialIcons name="add" size={32} color="#112111" />
         </TouchableOpacity>
 
         {/* Bottom Navigation */}
         <View style={[styles.bottomNav, themeStyles.navBg]}>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Home')}>
-                  <MaterialIcons name="home" size={28} color="#A8A29E" />
-                  <Text style={styles.navLabel}>Home</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History')}>
-                  <MaterialIcons name="menu-book" size={28} color="#A8A29E" />
-                  <Text style={styles.navLabel}>Diary</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar')}>
-                  <MaterialIcons name="calendar-today" size={28} color={COLORS.primary} />
-                  <Text style={[styles.navLabel, { color: COLORS.primary }]}>Calendar</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics')}>
-                  <MaterialIcons name="analytics" size={28} color="#A8A29E" />
-                  <Text style={styles.navLabel}>Insights</Text>
-             </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Home')}>
+            <MaterialIcons name="home" size={28} color="#A8A29E" />
+            <Text style={styles.navLabel}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History', { diaryId })}>
+            <MaterialIcons name="menu-book" size={28} color="#A8A29E" />
+            <Text style={styles.navLabel}>Diary</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar')}>
+            <MaterialIcons name="calendar-today" size={28} color={COLORS.primary} />
+            <Text style={[styles.navLabel, { color: COLORS.primary }]}>Calendar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics', { diaryId })}>
+            <MaterialIcons name="analytics" size={28} color="#A8A29E" />
+            <Text style={styles.navLabel}>Insights</Text>
+          </TouchableOpacity>
         </View>
 
       </SafeAreaView>
@@ -290,15 +643,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
   },
-  moodDotsContainer: {
-    flexDirection: 'row',
-    gap: 2,
-    marginTop: 4,
-  },
   moodDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 4,
   },
   dateHeader: {
     paddingHorizontal: 24,
@@ -325,6 +674,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
+  },
+  entryCounter: {
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    marginBottom: 12,
+  },
+  entryCounterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    fontFamily: 'Manrope_600SemiBold',
   },
   entryHeader: {
     flexDirection: 'row',
@@ -370,7 +731,17 @@ const styles = StyleSheet.create({
   entryFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  navButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tagsContainer: {
     flexDirection: 'row',

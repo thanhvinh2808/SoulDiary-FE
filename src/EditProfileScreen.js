@@ -39,20 +39,44 @@ const EditProfileScreen = ({ onNavigate, params }) => {
     profileImage: ''
   });
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
+  // Load current user if not passed via params
   useEffect(() => {
-    if (initialUser) {
-      setFormData({
-        name: initialUser.name || '',
-        email: initialUser.email || '',
-        phone: initialUser.phone || '',
-        bio: initialUser.bio || '',
-        profileImage: initialUser.profileImage || initialUser.photo || ''
-      });
-    }
+    const loadUser = async () => {
+      try {
+        if (initialUser) {
+          console.log('📥 Using passed user data:', initialUser);
+          setFormData({
+            name: initialUser.name || '',
+            email: initialUser.email || '',
+            phone: initialUser.phone || '',
+            bio: initialUser.bio || '',
+            profileImage: initialUser.profileImage || initialUser.photo || ''
+          });
+        } else {
+          console.log('📥 Fetching current user...');
+          const currentUser = await authService.getCurrentUser();
+          console.log('✅ Loaded current user:', currentUser);
+          setFormData({
+            name: currentUser.name || '',
+            email: currentUser.email || '',
+            phone: currentUser.phone || '',
+            bio: currentUser.bio || '',
+            profileImage: currentUser.profileImage || currentUser.photo || ''
+          });
+        }
+      } catch (error) {
+        console.error('❌ Failed to load user:', error.message);
+        Alert.alert('Error', 'Failed to load user data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUser();
   }, [initialUser]);
 
   const validateForm = () => {
@@ -94,18 +118,17 @@ const EditProfileScreen = ({ onNavigate, params }) => {
         phone: formData.phone.trim(),
       };
 
-      if (formData.profileImage) {
-        updateData.profileImage = formData.profileImage;
-      }
+      console.log('📝 Sending update data:', updateData);
 
       // Call update API
-      await authService.updateProfile(updateData);
+      const result = await authService.updateProfile(updateData);
+      console.log('✅ Profile update result:', result);
 
       Alert.alert('Success', 'Profile updated successfully!', [
         { text: 'OK', onPress: () => onNavigate('Profile') }
       ]);
     } catch (error) {
-      console.error('Failed to update profile:', error);
+      console.error('❌ Failed to update profile:', error);
       Alert.alert('Error', error.message || 'Failed to update profile');
     } finally {
       setSaving(false);
@@ -139,138 +162,144 @@ const EditProfileScreen = ({ onNavigate, params }) => {
           <View style={{ width: 24 }} />
         </View>
 
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ flex: 1 }}
-        >
-          <ScrollView 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
+        {loading ? (
+          <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : (
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ flex: 1 }}
           >
-            {/* Profile Image Preview */}
-            <View style={styles.imageSection}>
-              <View style={styles.profileImagePreview}>
-                {formData.profileImage ? (
-                  <Image
-                    source={{ uri: formData.profileImage }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                ) : (
-                  <MaterialIcons name="person" size={isSmallScreen ? 36 : 48} color={COLORS.primary} />
-                )}
-              </View>
-              <TouchableOpacity style={styles.changePhotoButton}>
-                <MaterialIcons name="camera-alt" size={16} color={COLORS.primary} />
-                <Text style={styles.changePhotoText}>Change Photo</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Form Fields */}
-            <View style={styles.formSection}>
-              
-              {/* Name Field */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Full Name *</Text>
-                <View style={[styles.inputWrapper, errors.name && styles.inputError]}>
-                  <MaterialIcons name="person-outline" size={18} color={COLORS.primary} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter your full name"
-                    placeholderTextColor={COLORS.textLightGray}
-                    value={formData.name}
-                    onChangeText={(text) => handleInputChange('name', text)}
-                    maxLength={50}
-                  />
-                </View>
-                {errors.name && <Text style={styles.errorMessage}>{errors.name}</Text>}
-                <Text style={styles.charCount}>{formData.name.length}/50</Text>
-              </View>
-
-              {/* Phone Field */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Phone</Text>
-                <View style={[styles.inputWrapper, errors.phone && styles.inputError]}>
-                  <MaterialIcons name="phone" size={18} color={COLORS.primary} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Your phone number"
-                    placeholderTextColor={COLORS.textLightGray}
-                    value={formData.phone}
-                    onChangeText={(text) => handleInputChange('phone', text)}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-                {errors.phone && <Text style={styles.errorMessage}>{errors.phone}</Text>}
-              </View>
-
-              {/* Email Field */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Email</Text>
-                <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
-                  <MaterialIcons name="mail-outline" size={18} color={COLORS.primary} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="your@email.com"
-                    placeholderTextColor={COLORS.textLightGray}
-                    value={formData.email}
-                    onChangeText={(text) => handleInputChange('email', text)}
-                    keyboardType="email-address"
-                    editable={false}
-                  />
-                </View>
-                {errors.email && <Text style={styles.errorMessage}>{errors.email}</Text>}
-                <Text style={styles.helpText}>Email cannot be changed</Text>
-              </View>
-
-              {/* Bio Field */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Bio</Text>
-                <View style={[styles.inputWrapper, styles.bioWrapper, errors.bio && styles.inputError]}>
-                  <TextInput
-                    style={[styles.input, styles.bioInput]}
-                    placeholder="Tell us about yourself (max 160 characters)"
-                    placeholderTextColor={COLORS.textLightGray}
-                    value={formData.bio}
-                    onChangeText={(text) => handleInputChange('bio', text)}
-                    maxLength={160}
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                  />
-                </View>
-                {errors.bio && <Text style={styles.errorMessage}>{errors.bio}</Text>}
-                <Text style={styles.charCount}>{formData.bio.length}/160</Text>
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.buttonGroup}>
-                <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={() => onNavigate('Profile')}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.saveButton, saving && styles.buttonDisabled]}
-                  onPress={handleSave}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContent}
+            >
+              {/* Profile Image Preview */}
+              <View style={styles.imageSection}>
+                <View style={styles.profileImagePreview}>
+                  {formData.profileImage ? (
+                    <Image
+                      source={{ uri: formData.profileImage }}
+                      style={StyleSheet.absoluteFill}
+                    />
                   ) : (
-                    <>
-                      <MaterialIcons name="check" size={20} color="#FFFFFF" />
-                      <Text style={styles.saveButtonText}>Save Changes</Text>
-                    </>
+                    <MaterialIcons name="person" size={isSmallScreen ? 36 : 48} color={COLORS.primary} />
                   )}
+                </View>
+                <TouchableOpacity style={styles.changePhotoButton}>
+                  <MaterialIcons name="camera-alt" size={16} color={COLORS.primary} />
+                  <Text style={styles.changePhotoText}>Change Photo</Text>
                 </TouchableOpacity>
               </View>
-            </View>
 
-            <View style={styles.spacer} />
-          </ScrollView>
-        </KeyboardAvoidingView>
+              {/* Form Fields */}
+              <View style={styles.formSection}>
+                
+                {/* Name Field */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Full Name *</Text>
+                  <View style={[styles.inputWrapper, errors.name && styles.inputError]}>
+                    <MaterialIcons name="person-outline" size={18} color={COLORS.primary} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter your full name"
+                      placeholderTextColor={COLORS.textLightGray}
+                      value={formData.name}
+                      onChangeText={(text) => handleInputChange('name', text)}
+                      maxLength={50}
+                    />
+                  </View>
+                  {errors.name && <Text style={styles.errorMessage}>{errors.name}</Text>}
+                  <Text style={styles.charCount}>{formData.name.length}/50</Text>
+                </View>
+
+                {/* Phone Field */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Phone</Text>
+                  <View style={[styles.inputWrapper, errors.phone && styles.inputError]}>
+                    <MaterialIcons name="phone" size={18} color={COLORS.primary} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Your phone number"
+                      placeholderTextColor={COLORS.textLightGray}
+                      value={formData.phone}
+                      onChangeText={(text) => handleInputChange('phone', text)}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                  {errors.phone && <Text style={styles.errorMessage}>{errors.phone}</Text>}
+                </View>
+
+                {/* Email Field */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Email</Text>
+                  <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
+                    <MaterialIcons name="mail-outline" size={18} color={COLORS.primary} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="your@email.com"
+                      placeholderTextColor={COLORS.textLightGray}
+                      value={formData.email}
+                      onChangeText={(text) => handleInputChange('email', text)}
+                      keyboardType="email-address"
+                      editable={false}
+                    />
+                  </View>
+                  {errors.email && <Text style={styles.errorMessage}>{errors.email}</Text>}
+                  <Text style={styles.helpText}>Email cannot be changed</Text>
+                </View>
+
+                {/* Bio Field */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Bio</Text>
+                  <View style={[styles.inputWrapper, styles.bioWrapper, errors.bio && styles.inputError]}>
+                    <TextInput
+                      style={[styles.input, styles.bioInput]}
+                      placeholder="Tell us about yourself (max 160 characters)"
+                      placeholderTextColor={COLORS.textLightGray}
+                      value={formData.bio}
+                      onChangeText={(text) => handleInputChange('bio', text)}
+                      maxLength={160}
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
+                  </View>
+                  {errors.bio && <Text style={styles.errorMessage}>{errors.bio}</Text>}
+                  <Text style={styles.charCount}>{formData.bio.length}/160</Text>
+                </View>
+
+                {/* Action Buttons */}
+                <View style={styles.buttonGroup}>
+                  <TouchableOpacity 
+                    style={styles.cancelButton}
+                    onPress={() => onNavigate('Profile')}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.saveButton, saving && styles.buttonDisabled]}
+                    onPress={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="check" size={20} color="#FFFFFF" />
+                        <Text style={styles.saveButtonText}>Save Changes</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.spacer} />
+            </ScrollView>
+          </KeyboardAvoidingView>
+        )}
       </SafeAreaView>
     </View>
   );
