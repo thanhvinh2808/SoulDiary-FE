@@ -94,6 +94,7 @@ const HistoryScreen = ({ onNavigate, params }) => {
   const [searchText, setSearchText] = useState('');
   const [groupedSections, setGroupedSections] = useState([]);
   const [showDeleted, setShowDeleted] = useState(false); // Toggle for deleted entries
+  const [restoringId, setRestoringId] = useState(null); // Track which entry is being restored
 
   const themeStyles = {
     container: { backgroundColor: COLORS.backgroundLight },
@@ -249,18 +250,29 @@ const HistoryScreen = ({ onNavigate, params }) => {
         text: 'Restore',
         onPress: async () => {
           try {
-            // Call restore endpoint (you may need to implement this in diaryService)
-            // For now, we'll assume it's available
+            setRestoringId(entryId); // Show loading animation
             if (diaryService.restoreEntry) {
               await diaryService.restoreEntry(diaryId, entryId);
             } else {
               Alert.alert('Info', 'Restore functionality coming soon');
+              setRestoringId(null);
               return;
             }
             console.log('✅ Entry restored:', entryId);
-            loadEntries(); // Refresh list
+            setRestoringId(null);
+            // Show success notification and navigate back
+            Alert.alert('Success', 'Entry restored to your journal!', [
+              {
+                text: 'OK',
+                onPress: () => {
+                  loadEntries(); // Refresh the history
+                  setShowDeleted(false); // Switch back to active entries
+                }
+              }
+            ]);
           } catch (error) {
-            Alert.alert('Error', 'Failed to restore entry');
+            setRestoringId(null);
+            Alert.alert('Error', 'Failed to restore entry: ' + error.message);
           }
         }
       }
@@ -303,14 +315,13 @@ const HistoryScreen = ({ onNavigate, params }) => {
               <TouchableOpacity 
                 style={[styles.actionBtn, styles.restoreBtn]}
                 onPress={() => handleRestoreEntry(item.entryId)}
+                disabled={restoringId === item.entryId}
               >
-                <MaterialIcons name="restore" size={20} color="#22c55e" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.actionBtn}
-                onPress={() => handleDeleteEntry(item.entryId)}
-              >
-                <MaterialIcons name="delete-forever" size={20} color="#EF4444" />
+                {restoringId === item.entryId ? (
+                  <ActivityIndicator size="small" color="#22c55e" />
+                ) : (
+                  <MaterialIcons name="restore" size={20} color="#22c55e" />
+                )}
               </TouchableOpacity>
             </>
           ) : (
