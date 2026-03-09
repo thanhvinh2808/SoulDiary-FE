@@ -158,4 +158,76 @@ router.post("/refresh", authController.refresh);
  */
 router.post("/logout", authController.logout);
 
+/**
+ * @openapi
+ * /api/v1/auth/google-oauth:
+ *   get:
+ *     summary: Browser-based Google OAuth - opens OAuth consent, then redirects back with token
+ *     tags: [Auth]
+ *     parameters:
+ *       - name: redirect
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Redirect URI after OAuth (e.g., souldiary://oauth-callback)
+ *     responses:
+ *       302:
+ *         description: Redirect to Google OAuth consent or back to app with token
+ */
+router.get("/google-oauth", authController.googleOAuthBrowser);
+
+/**
+ * @openapi
+ * /api/v1/auth/facebook-oauth:
+ *   get:
+ *     summary: Browser-based Facebook OAuth - opens OAuth consent, then redirects back with token
+ *     tags: [Auth]
+ *     parameters:
+ *       - name: redirect
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Redirect URI after OAuth (e.g., souldiary://oauth-callback)
+ *     responses:
+ *       302:
+ *         description: Redirect to Facebook OAuth consent or back to app with token
+ */
+router.get("/facebook-oauth", authController.facebookOAuthBrowser);
+
+/**
+ * @openapi
+ * /api/v1/auth/google-oauth-callback:
+ *   get:
+ *     summary: Google OAuth callback - Handle authorization code exchange
+ *     tags: [Auth]
+ *     parameters:
+ *       - name: code
+ *         in: query
+ *         schema:
+ *           type: string
+ *     responses:
+ *       302:
+ *         description: Redirect back to app with token or error
+ */
+router.get("/google-oauth-callback", authController.googleOAuthCallback);
+
+/**
+ * @openapi
+ * /api/v1/auth/facebook-oauth-callback:
+ *   get:
+ *     summary: Facebook OAuth callback - Handle authorization code exchange
+ *     tags: [Auth]
+ *     parameters:
+ *       - name: code
+ *         in: query
+ *         schema:
+ *           type: string
+ *     responses:
+ *       302:
+ *         description: Redirect back to app with token or error
+ */
+router.get("/facebook-oauth-callback", authController.facebookOAuthCallback);
+
 module.exports = router;

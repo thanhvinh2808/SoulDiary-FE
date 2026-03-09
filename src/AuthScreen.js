@@ -13,19 +13,17 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  Dimensions
+  Dimensions,
+  Linking
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import * as Facebook from 'expo-auth-session/providers/facebook';
-import { makeRedirectUri } from 'expo-auth-session';
 
 import { COLORS } from './theme';
 import { authService } from './services/authService';
 
-// 🔧 BẮT BUỘC: Hoàn thành auth session
+// 🔧 Complete the OAuth session
 WebBrowser.maybeCompleteAuthSession();
 
 const AuthScreen = ({ onLoginSuccess }) => {
@@ -34,6 +32,7 @@ const AuthScreen = ({ onLoginSuccess }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [oauthInProgress, setOauthInProgress] = useState(false);
   
   // OTP Modal State
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -48,107 +47,105 @@ const AuthScreen = ({ onLoginSuccess }) => {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
 
-  // 🔧 REDIRECT URI - Để Expo tự quyết định URI tốt nhất cho môi trường Native
-  const redirectUri = makeRedirectUri({
-    scheme: 'souldiary',
-     úseProxy: false,
-  });
-
-  // Log để bạn copy chính xác vào Google Console
+  // 🔧 CUSTOM OAUTH FLOW - Backend-driven OAuth for reliability
+  // Instead of expo-auth-session, use direct browser + deep link listener
+  
+  // Listen for OAuth callback redirects
   useEffect(() => {
-    console.log('--- COPY LINK NÀY VÀO GOOGLE CONSOLE ---');
-    console.log(redirectUri);
-    console.log('---------------------------------------');
-  }, [redirectUri]);
+    const handleDeepLink = ({ url }) => {
+      console.log('🔗 Deep link received:', url);
+      
+      if (!url) return;
+      
+      try {
+        const urlObj = new URL(url);
+        const token = urlObj.searchParams.get('token');
+        const error = urlObj.searchParams.get('error');
+        const provider = urlObj.searchParams.get('provider');
+        
+        if (error) {
+          console.error(`❌ OAuth error from ${provider}:`, error);
+          Alert.alert('Login Failed', decodeURIComponent(error));
+          return;
+        }
+        
+        if (token) {
+          console.log(`✅ OAuth token received from ${provider}`);
+          handleSocialLogin(provider, token);
+        }
+      } catch (error) {
+        console.error('⚠️ Error parsing OAuth callback:', error.message);
+      }
+    };
 
-  // ✅ GOOGLE AUTH CONFIG
-  const [gRequest, gResponse, promptGoogleAsync] = Google.useAuthRequest({
-    androidClientId: '41247382516-hedjbqieuige5lfkolt3flctolms69ta.apps.googleusercontent.com',
-    webClientId: '41247382516-1nbdp00km72e261hcipuqcamb9dttu8d.apps.googleusercontent.com',
-    iosClientId: '41247382516-hbui90gsqmtbdagni8sho68ffhfisv4p.apps.googleusercontent.com',
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    return () => subscription.remove();
+  }, []);
 
-  });
-
-  // Gọi hàm prompt trực tiếp
-  const handleGoogleLogin = () => {
-    promptGoogleAsync();
+  // 🔧 GOOGLE LOGIN - Opens browser to backend OAuth endpoint
+  const handleGoogleLogin = async () => {
+    try {
+      setOauthInProgress(true);
+      setLoading(true);
+      
+      const { API_URL } = require('./config');
+      const oauthUrl = `${API_URL}/auth/google-oauth?redirect=souldiary://oauth-callback`;
+      
+      console.log('🔵 Opening Google OAuth browser:', oauthUrl);
+      
+      // Open browser to OAuth endpoint
+      const result = await WebBrowser.openBrowserAsync(oauthUrl);
+      
+      console.log('📱 Browser result:', result);
+    } catch (error) {
+      console.error('❌ Google OAuth error:', error);
+      Alert.alert('Google Login Failed', error.message);
+    } finally {
+      setOauthInProgress(false);
+      setLoading(false);
+    }
   };
 
-  // ✅ FACEBOOK AUTH CONFIG
-  const [fRequest, fResponse, promptFacebookAsync] = Facebook.useAuthRequest({
-    clientId: '913094248341605',
-  });
-
-  // 🔧 XỬ LÝ GOOGLE RESPONSE
-  useEffect(() => {
-    if (gResponse?.type === 'success') {
-      const { authentication } = gResponse;
+  // 🔧 FACEBOOK LOGIN - Opens browser to backend OAuth endpoint
+  const handleFacebookLogin = async () => {
+    try {
+      setOauthInProgress(true);
+      setLoading(true);
       
-      // ID Token là JWT chứa đầy đủ thông tin user và an toàn hơn để verify ở Backend
-      // Access Token chỉ là chuỗi ngẫu nhiên để gọi API Google
-      const token = authentication?.idToken || authentication?.accessToken;
+      const { API_URL } = require('./config');
+      const oauthUrl = `${API_URL}/auth/facebook-oauth?redirect=souldiary://oauth-callback`;
       
-      if (token) {
-        handleSocialLogin('google', token);
-      } else {
-        Alert.alert('Error', 'Failed to get Google token');
-      }
-    } else if (gResponse?.type === 'error') {
-      Alert.alert(
-        'Google Login Failed', 
-        gResponse.error?.message || 'An error occurred'
-      );
+      console.log('🔵 Opening Facebook OAuth browser:', oauthUrl);
+      
+      // Open browser to OAuth endpoint
+      const result = await WebBrowser.openBrowserAsync(oauthUrl);
+      
+      console.log('📱 Browser result:', result);
+    } catch (error) {
+      console.error('❌ Facebook OAuth error:', error);
+      Alert.alert('Facebook Login Failed', error.message);
+    } finally {
+      setOauthInProgress(false);
+      setLoading(false);
     }
-  }, [gResponse]);
-
-  // 🔧 XỬ LÝ FACEBOOK RESPONSE
-  useEffect(() => {
-    if (fResponse?.type === 'success') {
-      const { authentication } = fResponse;
-      
-      if (authentication?.accessToken) {
-        handleSocialLogin('facebook', authentication.accessToken);
-      } else {
-        Alert.alert('Error', 'Failed to get Facebook token');
-      }
-    } else if (fResponse?.type === 'error') {
-      Alert.alert(
-        'Facebook Login Failed', 
-        fResponse.error?.message || 'An error occurred'
-      );
-    }
-  }, [fResponse]);
+  };
 
   // 🔧 XỬ LÝ SOCIAL LOGIN - Gửi token lên backend
   const handleSocialLogin = async (provider, token) => {
     setLoading(true);
     try {
-      let data;
-      if (provider === 'google') {
-        data = await authService.loginGoogle(token);
-      } else if (provider === 'facebook') {
-        data = await authService.loginFacebook(token);
-      }
+      // Save the token received from OAuth callback
+      await authService.saveToken(token);
       
-      console.log(`✅ ${provider} login response:`, JSON.stringify(data, null, 2));
-
-      // Kiểm tra thành công dựa trên cấu trúc trả về từ backend controller
-      // Backend: { status: "success", token: { ... }, data: { user: ... } }
-      if (data && (data.status === 'success' || data.token)) {
-        const user = data.data?.user || data.user;
-        if (user) {
-          onLoginSuccess(user);
-        } else {
-           console.warn('⚠️ Login success but no user data found in response');
-           // Vẫn gọi onLoginSuccess để bypass nếu cần thiết, hoặc báo lỗi
-           onLoginSuccess({ name: 'User', email: 'user@example.com' }); 
-        }
-      } else {
-        throw new Error(data?.message || 'Cấu trúc dữ liệu từ server không hợp lệ');
-      }
+      console.log(`✅ ${provider} login successful, token saved`);
+      
+      // Create a minimal user object and proceed to home
+      // The token is already saved, so the app state will treat user as logged in
+      const user = { name: 'User', email: 'user@example.com', provider };
+      onLoginSuccess(user);
     } catch (error) {
       console.error(`❌ ${provider} login failed:`, error);
-      Alert.alert('Đăng nhập thất bại', error.message || 'Không thể kết nối tới máy chủ');
+      Alert.alert('Login Failed', error.message || 'Could not complete login');
     } finally {
       setLoading(false);
     }
@@ -237,10 +234,8 @@ const AuthScreen = ({ onLoginSuccess }) => {
       setPasswordInput('');
       setRegistrationEmail('');
       
-      Alert.alert(
-        'Email Verified!', 
-        'Your email has been verified successfully. You can now log in.'
-      );
+      // OTP screen provides success feedback, so we don't show a separate notification
+      // Just close the modal to return to login form
     } catch (error) {
       console.error('❌ OTP verification failed:', error);
       const errorMsg = error.message || 'Invalid OTP. Please try again.';
