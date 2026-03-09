@@ -4,15 +4,15 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   Platform,
   Dimensions,
   ActivityIndicator,
-  Alert
+  Alert,
+  Modal,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 import { diaryService } from './services/diaryService';
@@ -52,6 +52,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [selectedDayEntries, setSelectedDayEntries] = useState([]); // All entries for selected day
   const [entryIndex, setEntryIndex] = useState(0); // Which entry to display if multiple
+  const [showMonthPicker, setShowMonthPicker] = useState(false); // Month picker modal
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -358,7 +359,8 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
     if (selectedEntry) {
       onNavigate('NewEntry', { 
         entryId: selectedEntry._id || selectedEntry.id,
-        diaryId 
+        diaryId,
+        returnTo: 'Calendar'
       });
     }
   };
@@ -405,18 +407,133 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         
-        {/* Header */}
+        {/* Enhanced Header */}
         <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-          <TouchableOpacity style={styles.iconButton} onPress={handlePreviousMonth}>
-            <MaterialIcons name="chevron-left" size={28} color={COLORS.textMain} />
+          <TouchableOpacity 
+            style={styles.navIconButton} 
+            onPress={handlePreviousMonth}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
+          >
+            <MaterialIcons name="chevron-left" size={28} color={COLORS.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </Text>
-          <TouchableOpacity style={styles.todayButton} onPress={handleToday}>
+
+          {/* Month/Year Selector */}
+          <TouchableOpacity 
+            style={styles.monthYearButton}
+            onPress={() => setShowMonthPicker(true)}
+            activeOpacity={0.7}
+          >
+            <View>
+              <Text style={styles.monthText}>
+                {monthNames[currentDate.getMonth()]}
+              </Text>
+              <Text style={styles.yearText}>
+                {currentDate.getFullYear()}
+              </Text>
+            </View>
+            <MaterialIcons name="expand-more" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.navIconButton} 
+            onPress={handleNextMonth}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
+          >
+            <MaterialIcons name="chevron-right" size={28} color={COLORS.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.todayButton} 
+            onPress={handleToday}
+          >
+            <MaterialIcons name="calendar-today" size={18} color="#FFF" />
             <Text style={styles.todayText}>Today</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Month/Year Picker Modal */}
+        <Modal
+          visible={showMonthPicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowMonthPicker(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay}
+            onPress={() => setShowMonthPicker(false)}
+            activeOpacity={1}
+          >
+            <View style={styles.monthPickerModal}>
+              <Text style={styles.modalTitle}>Select Month & Year</Text>
+              
+              {/* Year Selector */}
+              <View style={styles.pickerSection}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.yearScroller}
+                >
+                  {Array.from({ length: 11 }, (_, i) => currentDate.getFullYear() - 5 + i).map(year => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[
+                        styles.yearChip,
+                        currentDate.getFullYear() === year && styles.yearChipActive
+                      ]}
+                      onPress={() => {
+                        const newDate = new Date(year, currentDate.getMonth(), 1);
+                        setCurrentDate(newDate);
+                      }}
+                    >
+                      <Text style={[
+                        styles.yearChipText,
+                        currentDate.getFullYear() === year && styles.yearChipTextActive
+                      ]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Month Selector */}
+              <View style={styles.pickerSection}>
+                <Text style={styles.pickerLabel}>Month</Text>
+                <View style={styles.monthGrid}>
+                  {monthNames.map((month, index) => (
+                    <TouchableOpacity
+                      key={month}
+                      style={[
+                        styles.monthChip,
+                        currentDate.getMonth() === index && styles.monthChipActive
+                      ]}
+                      onPress={() => {
+                        const newDate = new Date(currentDate.getFullYear(), index, 1);
+                        setCurrentDate(newDate);
+                        setTimeout(() => setShowMonthPicker(false), 200);
+                      }}
+                    >
+                      <Text style={[
+                        styles.monthChipText,
+                        currentDate.getMonth() === index && styles.monthChipTextActive
+                      ]}>
+                        {month.substring(0, 3)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowMonthPicker(false)}
+              >
+                <Text style={styles.closeButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         {loading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -537,7 +654,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
         {/* FAB */}
         <TouchableOpacity 
           style={[styles.fab, !diaryId && { opacity: 0.5 }]}
-          onPress={() => onNavigate('NewEntry', { diaryId })}
+          onPress={() => onNavigate('NewEntry', { diaryId, returnTo: 'Calendar' })}
           disabled={!diaryId}
         >
           <MaterialIcons name="add" size={32} color="#112111" />
@@ -576,28 +693,165 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: 'rgba(253, 251, 247, 0.95)',
+    backgroundColor: 'rgba(253, 251, 247, 0.98)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E7E5E4',
+    gap: 8,
   },
-  iconButton: {
-    padding: 8,
+  navIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F3F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerTitle: {
+  monthYearButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E7E5E4',
+    gap: 8,
+  },
+  monthText: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: COLORS.primary,
+  },
+  yearText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#A8A29E',
+    marginTop: 2,
+  },
+  todayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+  },
+  todayText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFF',
+    fontFamily: 'Manrope_700Bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthPickerModal: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    width: '85%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  modalTitle: {
     fontSize: 18,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
     color: '#111811',
+    marginBottom: 20,
+    textAlign: 'center',
   },
-  todayButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  pickerSection: {
+    marginBottom: 20,
   },
-  todayText: {
+  pickerLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  yearScroller: {
+    flexGrow: 0,
+  },
+  yearChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F5F3F0',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E7E5E4',
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  yearChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  yearChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#111811',
+  },
+  yearChipTextActive: {
+    color: '#FFF',
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  monthChip: {
+    width: '23%',
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#F5F3F0',
+    borderWidth: 1,
+    borderColor: '#E7E5E4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  monthChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#111811',
+  },
+  monthChipTextActive: {
+    color: '#FFF',
+  },
+  closeButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  closeButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.primary,
     fontFamily: 'Manrope_700Bold',
+    color: '#FFF',
   },
   scrollContent: {
     paddingBottom: 24,

@@ -493,6 +493,96 @@ export const authService = {
     }
   },
 
+  // Forgot Password - Request OTP
+  async forgotPassword(email) {
+    try {
+      console.log('🔐 Requesting password reset OTP for:', email);
+      console.log('📍 API URL:', `${API_URL}/auth?action=forgot-password`);
+      
+      const response = await fetchWithRetry(`${API_URL}/auth?action=forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
+        throw new Error('Server error: Invalid response format');
+      }
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || `Password reset request failed (${response.status})`);
+      }
+
+      console.log('✅ OTP sent to email');
+      return data;
+    } catch (error) {
+      console.error('❌ Forgot Password Error:', error.message);
+      throw error;
+    }
+  },
+
+  // Reset Password after OTP verification
+  async resetPassword(newPassword, confirmPassword, temporaryToken = null) {
+    try {
+      let token = temporaryToken;
+      
+      // If no temporary token provided, try to get from storage (for regular password change)
+      if (!token) {
+        token = await this.getToken();
+      }
+      
+      if (!token) {
+        throw new Error('No token found. Please verify your email first.');
+      }
+
+      console.log('🔐 Resetting password');
+      console.log('📍 API URL:', `${API_URL}/users/updateMyPassword`);
+      
+      // When using temporary token (from OTP), this is a password reset, not a regular change
+      const isPasswordReset = !!temporaryToken;
+      console.log(`🔑 Password reset flow: ${isPasswordReset}`);
+      
+      const response = await fetchWithRetry(`${API_URL}/users/updateMyPassword`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          newPassword, 
+          confirmPassword,
+          isReset: isPasswordReset  // Flag to skip current password verification
+        }),
+      });
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
+        throw new Error('Server error: Invalid response format');
+      }
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || `Password reset failed (${response.status})`);
+      }
+
+      console.log('✅ Password reset successfully');
+      return data;
+    } catch (error) {
+      console.error('❌ Reset Password Error:', error.message);
+      throw error;
+    }
+  },
+
   // Helper function để test connection
   async testConnection() {
     try {

@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, Platform, StatusBar, Dimensions, Animated, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,13 +16,15 @@ import {
   Lora_400Regular_Italic
 } from '@expo-google-fonts/lora';
 import * as SplashScreen from 'expo-splash-screen';
-import { COLORS } from './src/theme';
+import { COLORS, getThemeColors } from './src/theme';
+import { authService } from './src/services/authService';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
 import HistoryScreen from './src/HistoryScreen';
 import CalendarScreen from './src/CalendarScreen';
 import AnalyticsScreen from './src/AnalyticsScreen';
 import AuthScreen from './src/AuthScreen';
-import NewEntryScreen from './src/NewEntryScreen'; // Import lại
+import NewEntryScreen from './src/NewEntryScreen';
 import HomeScreen from './src/HomeScreen';
 import OnboardingScreen from './src/OnboardingScreen';
 import ProfileScreen from './src/ProfileScreen';
@@ -31,14 +33,41 @@ import EditProfileScreen from './src/EditProfileScreen';
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
-export default function App() {
-  // FORCE LIGHT MODE: Luôn luôn là false để giữ nền Beige
-  const isDark = false; 
+// Main App content component with theme support
+function AppContent() {
+  const { isDark, isLoading: themeLoading } = useTheme();
+  const themeColors = getThemeColors(isDark || false);
   const [navState, setNavState] = useState({ screen: 'Onboarding', params: {} });
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
   // Toast state & animation
   const [toast, setToast] = useState({ visible: false, message: '' });
   const slideAnim = useRef(new Animated.Value(-100)).current;
+
+  // 🔧 Check if user is already logged in on app startup
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = await authService.getToken();
+        console.log('🔐 App startup: checking for existing token...');
+        
+        if (token) {
+          console.log('✅ Token found! User is logged in. Navigating to Home...');
+          setNavState({ screen: 'Home', params: {} });
+        } else {
+          console.log('❌ No token found. Showing Onboarding...');
+          setNavState({ screen: 'Onboarding', params: {} });
+        }
+      } catch (error) {
+        console.error('⚠️ Error checking auth:', error);
+        setNavState({ screen: 'Onboarding', params: {} });
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
 
   const showToast = (message) => {
     setToast({ visible: true, message });
@@ -57,24 +86,8 @@ export default function App() {
     ]).start(() => setToast({ visible: false, message: '' }));
   };
 
-  let [fontsLoaded] = useFonts({
-    Manrope_400Regular,
-    Manrope_500Medium,
-    Manrope_600SemiBold,
-    Manrope_700Bold,
-    Manrope_800ExtraBold,
-    Lora_400Regular,
-    Lora_500Medium,
-    Lora_400Regular_Italic,
-  });
-
-  const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded) {
-      await SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) {
+  // Show splash screen while checking authentication or theme loading
+  if (isCheckingAuth || themeLoading) {
     return null;
   }
 
@@ -82,7 +95,18 @@ export default function App() {
 
   const handleLoginSuccess = (userData) => {
     console.log('📱 App.js: handleLoginSuccess called with:', userData?.email);
-    const name = userData?.name || 'Friend';
+    let name = userData?.name;
+    
+    // Fallback: extract name from email if not available
+    if (!name || name.trim() === '') {
+      if (userData?.email) {
+        name = userData.email.split('@')[0];
+        name = name.charAt(0).toUpperCase() + name.slice(1);
+      } else {
+        name = 'Friend';
+      }
+    }
+    
     showToast(`Welcome back, ${name}! ✨`);
     
     // Đảm bảo chuyển trang ngay lập tức
@@ -99,7 +123,7 @@ export default function App() {
       case 'Home':
         return <HomeScreen onNavigate={navigateTo} {...params} />;
       case 'NewEntry':
-        return <NewEntryScreen onClose={() => navigateTo('Home')} {...params} />;
+        return <NewEntryScreen onClose={() => navigateTo(params?.returnTo || 'Home', params)} {...params} />;
       case 'History':
         return <HistoryScreen onNavigate={navigateTo} {...params} />;
       case 'Calendar':
@@ -118,18 +142,18 @@ export default function App() {
   return (
     <SafeAreaProvider>
       {/* Outer Container: Căn giữa trên Web */}
-      <View style={styles.outerContainer} onLayout={onLayoutRootView}>
+      <View style={[styles.outerContainer, { backgroundColor: themeColors.background }]}>
         
         {/* App Frame: Giới hạn chiều rộng trên Web */}
-        <View style={styles.appFrame}>
-          <StatusBar barStyle="dark-content" />
+        <View style={[styles.appFrame, { backgroundColor: themeColors.background }]}>
+          <StatusBar barStyle={themeColors.statusBarStyle} backgroundColor={themeColors.background} />
           {renderScreen()}
           
           {/* Toast Notification */}
           <Animated.View style={[styles.toastContainer, { transform: [{ translateY: slideAnim }] }]}>
-            <View style={styles.toastContent}>
+            <View style={[styles.toastContent, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <MaterialIcons name="stars" size={20} color={COLORS.primary} />
-              <Text style={styles.toastText}>{toast.message}</Text>
+              <Text style={[styles.toastText, { color: themeColors.text }]}>{toast.message}</Text>
             </View>
           </Animated.View>
         </View>
@@ -139,26 +163,61 @@ export default function App() {
   );
 }
 
+// Root App component with ThemeProvider
+function AppRoot() {
+  let [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+    Lora_400Regular,
+    Lora_500Medium,
+    Lora_400Regular_Italic,
+  });
+
+  // Hide splash screen when fonts are loaded
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+export default AppRoot;
+
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: Platform.OS === 'web' ? '#E5E5E5' : COLORS.backgroundLight,
-    alignItems: 'center', // Căn giữa ngang
-    justifyContent: 'center', // Căn giữa dọc (nếu muốn app lơ lửng)
+    backgroundColor: COLORS.backgroundLight, // Default light mode background
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        backgroundColor: '#E5E5E5',
+      }
+    }),
   },
   appFrame: {
     flex: 1,
     width: '100%',
-    backgroundColor: COLORS.backgroundLight,
-    // Web Specific Styles
+    backgroundColor: COLORS.backgroundLight, // Default light mode background
     ...Platform.select({
       web: {
-        maxWidth: 480, // Giới hạn chiều rộng giống điện thoại
+        maxWidth: 480,
         height: '100%',
-        maxHeight: '100%', // Full chiều cao cửa sổ
-        // Nếu bạn muốn nó lơ lửng như frame điện thoại thật thì dùng maxHeight cố định (vd: 850) và border radius
-        // Nhưng thường web app thì nên full height để trải nghiệm tốt hơn.
-        boxShadow: '0px 0px 20px rgba(0, 0, 0, 0.1)', // Đổ bóng nhẹ
+        maxHeight: '100%',
+        boxShadow: '0px 0px 20px rgba(0, 0, 0, 0.1)',
         overflow: 'hidden',
       }
     }),
@@ -172,7 +231,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toastContent: {
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
@@ -185,12 +243,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   toastText: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.textMain,
     fontFamily: 'Manrope_700Bold',
   }
 });

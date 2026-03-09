@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   Dimensions,
@@ -13,10 +12,58 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 import { diaryService } from './services/diaryService';
+import { authService } from './services/authService';
+import SideMenu from './SideMenu';
+import SearchScreen from './SearchScreen';
+import SettingsScreen from './SettingsScreen';
+import ExportScreen from './ExportScreen';
+
+// Daily inspiration quotes - one for each day
+const DAILY_QUOTES = [
+  "Small steps lead to big changes.",
+  "Your story matters.",
+  "Every day is a fresh start.",
+  "Write the truth you know.",
+  "Growth happens in stillness.",
+  "Your voice deserves to be heard.",
+  "Reflection is the path to clarity.",
+  "Progress over perfection.",
+  "Document your journey, celebrate your growth.",
+  "In writing, you find yourself.",
+  "Let your pages hold your secrets.",
+  "Today is full of possibility.",
+  "Your feelings are valid and important.",
+  "Write boldly, live fully.",
+  "Gratitude transforms everything.",
+  "You are stronger than you think.",
+  "Every entry is a step forward.",
+  "Your perspective is unique and valuable.",
+  "Healing happens when we honor our truth.",
+  "Dreams written down become plans.",
+  "Be honest, be brave, be you.",
+  "Your past shaped you, your future awaits.",
+  "In moments of doubt, read your progress.",
+  "Emotions are meant to be felt, understood, and written.",
+  "You are becoming who you're meant to be.",
+  "Give yourself the same compassion you give others.",
+  "Your story is still being written.",
+  "Each entry is a conversation with yourself.",
+  "Vulnerability is your greatest strength.",
+  "Keep going, you're doing better than you think.",
+];
+
+// Get daily quote based on current date (same quote all day, changes at midnight)
+const getDailyQuote = () => {
+  const today = new Date();
+  const dayOfYear = Math.floor(
+    (today - new Date(today.getFullYear(), 0, 0)) / 86400000
+  );
+  return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+};
 
 const HomeScreen = ({ onNavigate }) => {
   const isDark = false; // Luôn dùng Light Mode
@@ -24,6 +71,11 @@ const HomeScreen = ({ onNavigate }) => {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentDiaryId, setCurrentDiaryId] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [activeMenuScreen, setActiveMenuScreen] = useState(null); // null, 'search', 'settings', 'export'
+  const [currentPage, setCurrentPage] = useState(1);
+  const ENTRIES_PER_PAGE = 5;
+  const dailyQuote = getDailyQuote();
 
   const fetchData = useCallback(async () => {
     try {
@@ -68,6 +120,64 @@ const HomeScreen = ({ onNavigate }) => {
     fetchData();
   }, [fetchData]);
 
+  // 🔧 Menu Handlers
+  const handleSearch = () => {
+    console.log('🔍 Navigate to Search Entries');
+    setMenuOpen(false);
+    setActiveMenuScreen('search');
+  };
+
+  const handleSelectEntry = (entry) => {
+    console.log('✏️ Opening entry for editing:', entry.id || entry._id);
+    setActiveMenuScreen(null);
+    // Open NewEntryScreen with the entry for editing
+    setTimeout(() => {
+      // Use onNavigate if available, otherwise navigate in same screen
+      if (onNavigate) {
+        onNavigate('NewEntry', { 
+          entryId: entry.id || entry._id, 
+          diaryId: currentDiaryId,
+          returnTo: 'Home'
+        });
+      }
+    }, 300);
+  };
+
+  const handleSettings = () => {
+    console.log('⚙️ Navigate to Settings');
+    setMenuOpen(false);
+    setActiveMenuScreen('settings');
+  };
+
+  const handleExport = () => {
+    console.log('💾 Export diary');
+    setMenuOpen(false);
+    setActiveMenuScreen('export');
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Logout',
+          onPress: async () => {
+            try {
+              await authService.removeToken();
+              console.log('✅ Logged out successfully');
+              onNavigate('Auth');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to logout');
+            }
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+  };
+
   // Format Date: "2023-10-25..." -> Month: "OCT", Date: "25"
   const formatDate = (dateString) => {
     if (!dateString) {
@@ -90,40 +200,92 @@ const HomeScreen = ({ onNavigate }) => {
   const getStatsFromEntries = () => {
     const count = entries.length;
     
-    // Calculate current streak from entries
     let streak = 0;
     if (count > 0) {
-      const entryDates = new Set();
-      entries.forEach(entry => {
+      console.log(`\n🔥 STREAK CALCULATION DEBUG - Total entries: ${count}`);
+      
+      // Create a Set of normalized date strings (YYYY-MM-DD) to avoid timezone issues
+      const entryDateStrings = new Set();
+      entries.forEach((entry, idx) => {
         const dateStr = entry.entryDate || entry.createdAt || entry.date;
         if (dateStr) {
           const date = new Date(dateStr);
-          const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-          entryDates.add(normalized.getTime());
+          // Format as YYYY-MM-DD to avoid timezone issues
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const dateString = `${year}-${month}-${day}`;
+          entryDateStrings.add(dateString);
+          console.log(`  [${idx}] ${entry.title || 'Untitled'} → ${dateString}`);
         }
       });
       
-      const dates = Array.from(entryDates).sort((a, b) => b - a);
-      const today = new Date();
-      const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-      const lastEntryTime = dates[0];
-      const daysDiff = Math.floor((todayNormalized - lastEntryTime) / (1000 * 60 * 60 * 24));
+      console.log(`🗓️ Unique entry dates (${entryDateStrings.size}):`, Array.from(entryDateStrings).sort());
       
-      if (daysDiff <= 1) {
-        let checkDate = lastEntryTime;
-        for (const entryTime of dates) {
-          if (entryTime === checkDate) {
-            streak++;
-            checkDate -= 1000 * 60 * 60 * 24;
-          } else {
-            break;
-          }
+      // Start from today and count backwards
+      const today = new Date();
+      console.log(`📅 Today: ${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
+      console.log(`⏰ Time: ${today.toLocaleTimeString()}`);
+      
+      let checkDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      // Count consecutive days backwards from today
+      while (true) {
+        const year = checkDate.getFullYear();
+        const month = String(checkDate.getMonth() + 1).padStart(2, '0');
+        const day = String(checkDate.getDate()).padStart(2, '0');
+        const dateString = `${year}-${month}-${day}`;
+        
+        if (entryDateStrings.has(dateString)) {
+          streak++;
+          console.log(`  ✅ ${dateString} - HAS ENTRY (streak: ${streak})`);
+          // Move to previous day
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          console.log(`  ❌ ${dateString} - NO ENTRY (streak broken)`);
+          break;
         }
       }
     }
     
-    console.log(`📋 HomeScreen Stats - Entries: ${count}, Streak: ${streak}`);
+    console.log(`\n📊 FINAL: ${count} entries, ${streak} day streak\n`);
     return { count, streak };
+  };
+
+  const { count: totalCount, streak: currentStreak } = getStatsFromEntries();
+
+  // Get motivational message based on streak
+  const getStreakMessage = (streak) => {
+    if (streak === 0) {
+      return "Start writing to build your streak!";
+    } else if (streak === 1) {
+      return "Great start! Write again tomorrow.";
+    } else if (streak === 2) {
+      return "Nice momentum! Keep going! 💪";
+    } else if (streak === 3) {
+      return "Three days strong! You're unstoppable!";
+    } else if (streak >= 4 && streak <= 6) {
+      return "Amazing consistency! You're on fire! 🔥";
+    } else if (streak >= 7 && streak <= 13) {
+      return "Two weeks of greatness! You're a journaling champion!";
+    } else if (streak >= 14 && streak <= 30) {
+      return "One month+ streak! Absolutely incredible! 🌟";
+    } else if (streak > 30) {
+      return `${streak} days of pure dedication! You're a legend! 👑`;
+    }
+  };
+
+  // Pagination logic for Recent Entries
+  const totalPages = Math.ceil(entries.length / ENTRIES_PER_PAGE);
+  const startIndex = (currentPage - 1) * ENTRIES_PER_PAGE;
+  const paginatedEntries = entries.slice(startIndex, startIndex + ENTRIES_PER_PAGE);
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
   const getMoodIcon = (mood) => {
@@ -191,7 +353,7 @@ const HomeScreen = ({ onNavigate }) => {
       <TouchableOpacity 
         key={item.id || item._id} 
         style={[styles.entryCard, themeStyles.entryBg, { borderColor: 'transparent' }]}
-        onPress={() => onNavigate('NewEntry', { entryId: item.id || item._id, diaryId: currentDiaryId })}
+        onPress={() => onNavigate('NewEntry', { entryId: item.id || item._id, diaryId: currentDiaryId, returnTo: 'Home' })}
       >
         <View style={[styles.dateBox, isDark ? { backgroundColor: COLORS.backgroundDark } : { backgroundColor: '#FFFFFF' }]}>
           <Text style={styles.dateMonth}>{month}</Text>
@@ -209,13 +371,33 @@ const HomeScreen = ({ onNavigate }) => {
   };
 
   return (
+    <>
+      {/* Show menu screens based on active selection */}
+      {activeMenuScreen === 'search' && (
+        <SearchScreen 
+          onClose={() => {
+            setActiveMenuScreen(null);
+          }}
+          diaryId={currentDiaryId}
+          onSelectEntry={handleSelectEntry}
+        />
+      )}
+      {activeMenuScreen === 'settings' && (
+        <SettingsScreen onClose={() => setActiveMenuScreen(null)} />
+      )}
+      {activeMenuScreen === 'export' && (
+        <ExportScreen onClose={() => setActiveMenuScreen(null)} />
+      )}
+
+      {/* Main Home Screen */}
+      {!activeMenuScreen && (
     <View style={[styles.container, themeStyles.container]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         
         {/* Top App Bar */}
         <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-            <TouchableOpacity style={styles.iconButton}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => setMenuOpen(true)}>
                  <MaterialIcons name="menu" size={28} color={isDark ? '#FFF' : '#111811'} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, themeStyles.textPrimary]}>SoulDiary</Text>
@@ -236,7 +418,7 @@ const HomeScreen = ({ onNavigate }) => {
             {/* Daily Inspiration */}
             <View style={styles.inspirationContainer}>
                 <Text style={[styles.quoteText, themeStyles.textQuote]}>
-                    "Small steps lead to big changes."
+                    "{dailyQuote}"
                 </Text>
                 <Text style={styles.quoteLabel}>Daily Inspiration</Text>
             </View>
@@ -246,11 +428,15 @@ const HomeScreen = ({ onNavigate }) => {
                 <View style={[styles.streakCard, themeStyles.cardBg, themeStyles.border]}>
                     <View style={styles.streakInfo}>
                         <Text style={styles.streakLabel}>CURRENT STREAK</Text>
-                        <Text style={[styles.streakValue, themeStyles.textPrimary]}>5 Day Streak</Text>
-                        <Text style={[styles.streakSub, themeStyles.textSecondary]}>You're doing great! Keep it up.</Text>
+                        <Text style={[styles.streakValue, themeStyles.textPrimary]}>
+                          {currentStreak} Day{currentStreak !== 1 ? 's' : ''} Streak
+                        </Text>
+                        <Text style={[styles.streakSub, themeStyles.textSecondary]}>
+                          {getStreakMessage(currentStreak)}
+                        </Text>
                     </View>
                     <View style={styles.streakIconContainer}>
-                         <MaterialIcons name="local-fire-department" size={40} color={COLORS.primary} />
+                         <MaterialIcons name={currentStreak > 0 ? "local-fire-department" : "schedule"} size={40} color={currentStreak > 0 ? COLORS.primary : '#D1D5DB'} />
                     </View>
                 </View>
             </View>
@@ -259,7 +445,7 @@ const HomeScreen = ({ onNavigate }) => {
             <View style={styles.actionContainer}>
                 <TouchableOpacity 
                   style={[styles.writeButton, (loading || !currentDiaryId) && { opacity: 0.5 }]} 
-                  onPress={() => onNavigate('NewEntry', { diaryId: currentDiaryId })}
+                  onPress={() => onNavigate('NewEntry', { diaryId: currentDiaryId, returnTo: 'Home' })}
                   disabled={loading || !currentDiaryId}
                 >
                     <MaterialIcons name="edit-note" size={24} color="#111811" />
@@ -283,13 +469,49 @@ const HomeScreen = ({ onNavigate }) => {
                 {loading ? (
                   <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />
                 ) : (Array.isArray(entries) && entries.length > 0) ? (
-                  entries.map(renderEntryItem)
+                  paginatedEntries.map(renderEntryItem)
                 ) : (
                   <Text style={{ textAlign: 'center', color: COLORS.textGray, marginTop: 20 }}>
                     No entries yet. Start writing!
                   </Text>
                 )}
             </View>
+
+            {/* Pagination Controls */}
+            {!loading && entries.length > ENTRIES_PER_PAGE && totalPages > 1 && (
+              <View style={styles.paginationContainer}>
+                <TouchableOpacity
+                  style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+                  onPress={handlePreviousPage}
+                  disabled={currentPage === 1}
+                >
+                  <MaterialIcons name="chevron-left" size={20} color={currentPage === 1 ? '#D1D5DB' : COLORS.primary} />
+                  <Text style={[styles.paginationButtonText, currentPage === 1 && styles.paginationButtonTextDisabled]}>
+                    Previous
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.pageIndicator}>
+                  <Text style={styles.pageIndicatorText}>
+                    Page {currentPage} of {totalPages}
+                  </Text>
+                  <Text style={styles.pageCountText}>
+                    ({startIndex + 1}-{Math.min(startIndex + ENTRIES_PER_PAGE, entries.length)} of {entries.length})
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
+                  onPress={handleNextPage}
+                  disabled={currentPage === totalPages}
+                >
+                  <Text style={[styles.paginationButtonText, currentPage === totalPages && styles.paginationButtonTextDisabled]}>
+                    Next
+                  </Text>
+                  <MaterialIcons name="chevron-right" size={20} color={currentPage === totalPages ? '#D1D5DB' : COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Padding for Bottom Nav */}
             <View style={{ height: 100 }} />
@@ -316,7 +538,19 @@ const HomeScreen = ({ onNavigate }) => {
         </View>
 
       </SafeAreaView>
+
+      {/* Side Menu */}
+      <SideMenu
+        isOpen={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onSearch={handleSearch}
+        onSettings={handleSettings}
+        onExport={handleExport}
+        onLogout={handleLogout}
+      />
     </View>
+      )}
+    </>
   );
 };
 
@@ -524,6 +758,59 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
     marginTop: 0,
+  },
+  paginationContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E7E5E4',
+  },
+  paginationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F4',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+  },
+  paginationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: COLORS.primary,
+  },
+  paginationButtonTextDisabled: {
+    color: '#D1D5DB',
+  },
+  pageIndicator: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  pageIndicatorText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#111811',
+  },
+  pageCountText: {
+    fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
+    color: '#A8A29E',
+    marginTop: 2,
   }
 });
 
