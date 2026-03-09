@@ -15,11 +15,25 @@ const entrySchema = new mongoose.Schema({
     enum: ['happy', 'sad', 'neutral', 'excited', 'angry'],
     default: 'neutral'
   },
+  tags: {
+    type: [String],
+    default: [],
+    trim: true
+  },
   date: {
     type: Date,
     default: Date.now
   },
-  images: [String]
+  images: [String],
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  }
 }, { timestamps: true });
 
 const diarySchema = new mongoose.Schema({

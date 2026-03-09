@@ -16,4 +16,7 @@ router
   .patch(journalController.updateJournal)
   .delete(journalController.deleteJournal);
 
+// Restore soft-deleted entry
+router.patch('/:id/restore', journalController.restoreJournal);
+
 module.exports = router;

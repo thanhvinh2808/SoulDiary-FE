@@ -23,14 +23,55 @@ exports.getJournals = catchAsync(async (req, res, next) => {
     });
   }
   
-  // For now, return all entries sorted
-  const journals = diary.entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+  // Handle soft delete filtering
+  const includeDeleted = req.query.includeDeleted === 'true';
+  console.log(`🔍 getJournals: includeDeleted=${includeDeleted}`);
+  console.log(`📊 Total entries in diary: ${diary.entries.length}`);
+  
+  // Filter entries based on soft delete status
+  let filteredEntries = diary.entries.filter(entry => {
+    // Treat undefined isDeleted as false (active)
+    const isDeletedStatus = entry.isDeleted === true ? true : false;
+    
+    if (includeDeleted) {
+      console.log(`  Entry "${entry.title}": isDeleted=${entry.isDeleted}, returning=${isDeletedStatus}`);
+      return isDeletedStatus;  // Show only deleted entries
+    } else {
+      console.log(`  Entry "${entry.title}": isDeleted=${entry.isDeleted}, returning=${!isDeletedStatus}`);
+      return !isDeletedStatus;  // Show only active entries (default)
+    }
+  });
+  
+  // Get pagination params
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+  
+  // Sort by date (newest first)
+  const sortedEntries = filteredEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
+  
+  // Apply pagination
+  const paginatedEntries = sortedEntries.slice(skip, skip + limit);
+  
+  // Calculate pagination info
+  const totalPages = Math.ceil(filteredEntries.length / limit);
 
   res.status(200).json({
     status: 'success',
-    results: journals.length,
+    page,
+    limit,
+    totalPages,
+    totalResults: filteredEntries.length,
+    results: paginatedEntries.length,
+    message: 'Journals retrieved successfully',
     data: {
-        journals: journals
+        journals: paginatedEntries,
+        pagination: {
+          page,
+          limit,
+          totalPages,
+          totalResults: filteredEntries.length
+        }
     }
   });
 });
@@ -48,7 +89,9 @@ exports.createJournal = catchAsync(async (req, res, next) => {
         content: req.body.content,
         mood: req.body.mood,
         date: req.body.entryDate, // Match the spec
-        tags: req.body.tags
+        tags: req.body.tags,
+        isDeleted: false,  // Explicitly set soft delete flag
+        deletedAt: null
     };
 
     diary.entries.push(newEntry);
@@ -113,7 +156,7 @@ exports.updateJournal = catchAsync(async (req, res, next) => {
 });
 
 exports.deleteJournal = catchAsync(async (req, res, next) => {
-    // Soft delete is not implemented in the model, so we will do a hard delete.
+    // Soft delete: mark entry as deleted instead of removing it
     const diary = await Diary.findOne({ user: req.user.id, 'entries._id': req.params.id });
 
     if (!diary) {
@@ -122,15 +165,50 @@ exports.deleteJournal = catchAsync(async (req, res, next) => {
     
     const entry = diary.entries.id(req.params.id);
     if(entry) {
-        entry.deleteOne();
+        // Soft delete: set isDeleted flag and deletedAt timestamp
+        entry.isDeleted = true;
+        entry.deletedAt = new Date();
+        console.log(`🗑️ Soft delete: Entry ${req.params.id} marked as deleted`);
     } else {
         return next(new AppError('Không tìm thấy nhật ký', 404));
     }
 
     await diary.save();
 
-    res.status(204).json({
+    res.status(200).json({
         status: 'success',
-        data: null
+        message: 'Entry moved to trash',
+        data: {
+            journal: entry
+        }
+    });
+});
+
+exports.restoreJournal = catchAsync(async (req, res, next) => {
+    // Restore a soft-deleted entry
+    const diary = await Diary.findOne({ user: req.user.id, 'entries._id': req.params.id });
+
+    if (!diary) {
+        return next(new AppError('Không tìm thấy nhật ký', 404));
+    }
+    
+    const entry = diary.entries.id(req.params.id);
+    if(entry) {
+        // Restore: unset isDeleted flag and clear deletedAt
+        entry.isDeleted = false;
+        entry.deletedAt = null;
+        console.log(`♻️ Restore: Entry ${req.params.id} restored from trash`);
+    } else {
+        return next(new AppError('Không tìm thấy nhật ký', 404));
+    }
+
+    await diary.save();
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Entry restored from trash',
+        data: {
+            journal: entry
+        }
     });
 });

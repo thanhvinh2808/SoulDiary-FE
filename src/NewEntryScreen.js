@@ -11,7 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -26,30 +27,83 @@ const MOODS = [
   { id: 'anxious', emoji: '😰', label: 'Anxious' },
 ];
 
-const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
+const NewEntryScreen = ({ onClose, route, ...props }) => {
   const insets = useSafeAreaInsets();
+  // Handle diaryId and entryId from both route params and direct props
+  const initialDiaryId = props.diaryId || route?.params?.diaryId;
+  const entryId = props.entryId || route?.params?.entryId;
+  
+  console.log('📱 NewEntryScreen mounted with:', { initialDiaryId, entryId, propsKeys: Object.keys(props) });
+  
+  const [diaryId, setDiaryId] = useState(initialDiaryId);
   const [selectedMood, setSelectedMood] = useState('happy');
   const [entryText, setEntryText] = useState('');
-  const [title, setTitle] = useState(''); // Thêm title state
+  const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingEntry, setLoadingEntry] = useState(false);
+  
+  // Tags state
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [showAddTagModal, setShowAddTagModal] = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [availableTags, setAvailableTags] = useState([
+    'reflection', 'morning', 'evening', 'grateful', 'challenge', 'success',
+    'self-care', 'creative', 'work', 'personal', 'health', 'family'
+  ]);
 
-  // Load entry data if entryId is provided
+  // Initialize diaryId if not provided
+  useEffect(() => {
+    if (!diaryId) {
+      const initializeDiary = async () => {
+        try {
+          console.log('⚠️ No diaryId provided, initializing diary...');
+          const diaries = await diaryService.getDiaries();
+          
+          if (diaries && diaries.length > 0) {
+            console.log('✅ Using existing diary:', diaries[0]._id);
+            setDiaryId(diaries[0]._id || diaries[0].id);
+          } else {
+            console.log('📝 Creating new default diary...');
+            const newDiary = await diaryService.createDiary(
+              "My Journal", 
+              "Your journey begins here"
+            );
+            const diary = newDiary?.data || newDiary;
+            const createdId = diary?._id || diary?.id;
+            console.log('✅ New diary created:', createdId);
+            setDiaryId(createdId);
+          }
+        } catch (error) {
+          console.error('❌ Failed to initialize diary:', error);
+          Alert.alert('Error', 'Could not initialize diary: ' + error.message);
+        }
+      };
+      initializeDiary();
+    }
+  }, []);
+
+  // Load entry data if diaryId and entryId are provided
   useEffect(() => {
     if (diaryId && entryId) {
       const loadEntry = async () => {
-        setLoading(true);
+        setLoadingEntry(true);
         try {
+          console.log('📋 Loading entry:', { diaryId, entryId });
           const entry = await diaryService.getEntryById(diaryId, entryId);
+          console.log('✅ Entry loaded:', entry);
           if (entry) {
             setTitle(entry.title || '');
             setEntryText(entry.content || '');
             setSelectedMood(entry.mood || 'neutral');
+            setSelectedTags(entry.tags || []);
           }
         } catch (error) {
-          console.error('Failed to load entry:', error);
-          Alert.alert('Error', 'Failed to load the entry for editing.');
+          console.error('⚠️ Failed to load entry:', error.message);
+          // Don't show alert - just continue with empty editor
+          // This allows editing entries even if they can't be loaded
+          console.warn('📝 Opening empty editor instead');
         } finally {
-          setLoading(false);
+          setLoadingEntry(false);
         }
       };
       loadEntry();
@@ -58,8 +112,9 @@ const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
   
   const handleSave = async () => {
     if (!diaryId) {
-       Alert.alert("Error", "No Diary Selected");
-       return;
+      console.error('❌ No diary selected');
+      Alert.alert("Error", "No Diary Selected");
+      return;
     }
     if (!entryText.trim()) {
       Alert.alert("Empty Entry", "Please write something!");
@@ -68,28 +123,72 @@ const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
 
     setLoading(true);
     try {
-       // Tự động lấy dòng đầu làm title nếu không nhập title
-       const finalTitle = title || entryText.split('\n')[0].substring(0, 50) + "...";
-       
-       if (entryId) {
-         // Update existing entry
-         await diaryService.updateEntry(diaryId, entryId, {
-           title: finalTitle,
-           content: entryText,
-           mood: selectedMood
-         });
-         Alert.alert("Success", "Entry updated successfully!");
-       } else {
-         // Create new entry
-         await diaryService.createEntry(diaryId, finalTitle, entryText, selectedMood);
-         Alert.alert("Success", "Entry saved successfully!");
-       }
-       onClose(); // Quay về Home và trigger reload
+      // Auto-generate title from first line if not provided
+      const finalTitle = title.trim() || entryText.split('\n')[0].substring(0, 50);
+      
+      console.log('💾 Saving entry:', { diaryId, entryId, title: finalTitle, mood: selectedMood, tags: selectedTags });
+      
+      if (entryId) {
+        // Update existing entry
+        const result = await diaryService.updateEntry(diaryId, entryId, {
+          title: finalTitle,
+          content: entryText,
+          mood: selectedMood,
+          tags: selectedTags
+        });
+        console.log('✅ Entry updated:', result);
+        Alert.alert("Success", "Entry updated successfully!");
+      } else {
+        // Create new entry
+        const result = await diaryService.createEntry(diaryId, finalTitle, entryText, selectedMood, selectedTags);
+        console.log('✅ Entry created:', result);
+        Alert.alert("Success", "Entry saved successfully!");
+      }
+      onClose();
     } catch (error) {
-       Alert.alert("Error", "Failed to save entry: " + error.message);
+      console.error('❌ Save failed:', error);
+      Alert.alert("Error", "Failed to save entry: " + error.message);
     } finally {
-       setLoading(false);
+      setLoading(false);
     }
+  };
+
+  // Tag management handlers
+  const toggleTag = (tag) => {
+    console.log(`🏷️ Toggle tag: ${tag}`);
+    setSelectedTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
+  const handleAddNewTag = () => {
+    if (!newTagInput.trim()) {
+      Alert.alert('Empty Tag', 'Please enter a tag name');
+      return;
+    }
+
+    const tagName = newTagInput.trim().toLowerCase();
+    
+    // Check if tag already exists
+    if (availableTags.includes(tagName)) {
+      Alert.alert('Tag Exists', 'This tag already exists');
+      setNewTagInput('');
+      return;
+    }
+
+    // Add new tag to available tags
+    console.log(`➕ Adding new tag: ${tagName}`);
+    setAvailableTags(prev => [...prev, tagName]);
+    setSelectedTags(prev => [...prev, tagName]);
+    setNewTagInput('');
+    setShowAddTagModal(false);
+  };
+
+  const removeSelectedTag = (tag) => {
+    console.log(`❌ Remove tag: ${tag}`);
+    setSelectedTags(prev => prev.filter(t => t !== tag));
   };
 
   // Styles động (dù hiện tại chỉ dùng Light Mode, giữ cấu trúc này để dễ mở rộng)
@@ -108,22 +207,28 @@ const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
         
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose} disabled={loading}>
-                <MaterialIcons name="close" size={24} color={COLORS.textGray} />
-            </TouchableOpacity>
-            <View style={styles.headerTitleContainer}>
-                <Text style={[styles.headerTitle, { color: COLORS.textMain }]}>
-                  {entryId ? 'Edit Entry' : 'New Entry'}
-                </Text>
-                <Text style={styles.headerDate}>{new Date().toDateString()}</Text>
-            </View>
-            <TouchableOpacity style={styles.doneButton} onPress={handleSave} disabled={loading}>
-                {loading ? (
-                    <ActivityIndicator size="small" color={COLORS.primary} />
-                ) : (
-                    <Text style={styles.doneButtonText}>Done</Text>
-                )}
-            </TouchableOpacity>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose} disabled={loading || loadingEntry}>
+            <MaterialIcons name="close" size={24} color={COLORS.textGray} />
+          </TouchableOpacity>
+          
+          <View style={styles.headerTitleContainer}>
+            <Text style={[styles.headerTitle, { color: COLORS.textMain }]}>
+              {loadingEntry ? 'Loading...' : entryId ? 'Edit Entry' : 'New Entry'}
+            </Text>
+            <Text style={styles.headerDate}>{new Date().toDateString()}</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.doneButton, (loading || loadingEntry) && styles.doneButtonDisabled]} 
+            onPress={handleSave} 
+            disabled={loading || loadingEntry}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            ) : (
+              <Text style={styles.doneButtonText}>Save</Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         <KeyboardAvoidingView 
@@ -135,77 +240,172 @@ const NewEntryScreen = ({ onClose, diaryId, entryId }) => {
                 showsVerticalScrollIndicator={false}
             >
                 
+            {loadingEntry ? (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+              </View>
+            ) : (
+              <>
                 {/* Mood Picker */}
                 <View style={styles.moodSection}>
-                    <Text style={styles.moodTitle}>HOW ARE YOU FEELING?</Text>
-                    <View style={styles.moodContainer}>
-                        {MOODS.map((mood) => {
-                            const isSelected = selectedMood === mood.id;
-                            return (
-                                <TouchableOpacity 
-                                    key={mood.id} 
-                                    style={styles.moodItem}
-                                    onPress={() => setSelectedMood(mood.id)}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={[
-                                        styles.moodIconContainer,
-                                        { backgroundColor: themeStyles.moodBg },
-                                        isSelected && styles.moodIconSelected
-                                    ]}>
-                                        <Text style={styles.moodEmoji}>{mood.emoji}</Text>
-                                    </View>
-                                    <Text style={[
-                                        styles.moodLabel, 
-                                        isSelected && { color: COLORS.primary }
-                                    ]}>
-                                        {mood.label}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
+                  <Text style={styles.moodTitle}>HOW ARE YOU FEELING?</Text>
+                  <View style={styles.moodContainer}>
+                    {MOODS.map((mood) => {
+                      const isSelected = selectedMood === mood.id;
+                      return (
+                        <TouchableOpacity 
+                          key={mood.id} 
+                          style={styles.moodItem}
+                          onPress={() => setSelectedMood(mood.id)}
+                          disabled={loading}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[
+                            styles.moodIconContainer,
+                            { backgroundColor: themeStyles.moodBg },
+                            isSelected && styles.moodIconSelected
+                          ]}>
+                            <Text style={styles.moodEmoji}>{mood.emoji}</Text>
+                          </View>
+                          <Text style={[
+                            styles.moodLabel, 
+                            isSelected && { color: COLORS.primary }
+                          ]}>
+                            {mood.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
 
                 <View style={styles.divider} />
 
+                {/* Title Input */}
+                <TextInput
+                  style={[styles.titleInput, { color: COLORS.textMain }]}
+                  placeholder="Entry title (optional)"
+                  placeholderTextColor="#9CA3AF"
+                  value={title}
+                  onChangeText={setTitle}
+                  editable={!loading}
+                />
+
                 {/* Editor */}
                 <View style={styles.editorContainer}>
-                    <TextInput
-                        style={[styles.editor, { color: COLORS.textMain }]}
-                        placeholder="Dear Diary, how was your day?"
-                        placeholderTextColor="#D1D5DB"
-                        multiline
-                        textAlignVertical="top"
-                        value={entryText}
-                        onChangeText={setEntryText}
-                        scrollEnabled={true}
-                    />
+                  <TextInput
+                    style={[styles.editor, { color: COLORS.textMain }]}
+                    placeholder="Dear Diary, how was your day?"
+                    placeholderTextColor="#D1D5DB"
+                    multiline
+                    textAlignVertical="top"
+                    value={entryText}
+                    onChangeText={setEntryText}
+                    editable={!loading}
+                    scrollEnabled={true}
+                  />
                 </View>
+              </>
+            )}
 
                 {/* Footer / Tags */}
                 <View style={styles.footer}>
-                    {/* Tags UI giữ nguyên nhưng chưa có logic xử lý API tags */}
+                    <Text style={styles.tagsLabel}>TAGS</Text>
+                    <View style={styles.selectedTagsContainer}>
+                      {selectedTags.length > 0 ? (
+                        selectedTags.map(tag => (
+                          <TouchableOpacity 
+                            key={tag}
+                            style={styles.selectedTag}
+                            onPress={() => removeSelectedTag(tag)}
+                          >
+                            <Text style={styles.selectedTagText}>#{tag}</Text>
+                            <MaterialIcons name="close" size={14} color={COLORS.primary} style={{ marginLeft: 4 }} />
+                          </TouchableOpacity>
+                        ))
+                      ) : (
+                        <Text style={styles.noTagsText}>No tags selected</Text>
+                      )}
+                    </View>
+
+                    <Text style={styles.availableTagsLabel}>AVAILABLE TAGS</Text>
                     <View style={styles.tagsContainer}>
-                        <MaterialIcons name="label" size={20} color={COLORS.textGray} style={{ marginRight: 8 }} />
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                            <TouchableOpacity style={styles.tagActive}>
-                                <Text style={styles.tagTextActive}>#reflection</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.tag, { backgroundColor: themeStyles.tagBg }]}>
-                                <Text style={styles.tagText}>#morning</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.tagAdd}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                            {availableTags.map(tag => {
+                              const isSelected = selectedTags.includes(tag);
+                              return (
+                                <TouchableOpacity 
+                                  key={tag}
+                                  style={[
+                                    styles.tag,
+                                    isSelected && styles.tagSelected,
+                                    { backgroundColor: isSelected ? 'rgba(25, 230, 25, 0.1)' : themeStyles.tagBg }
+                                  ]}
+                                  onPress={() => toggleTag(tag)}
+                                >
+                                  <Text style={[styles.tagText, isSelected && styles.tagTextSelected]}>#{tag}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                            <TouchableOpacity 
+                              style={styles.tagAdd}
+                              onPress={() => setShowAddTagModal(true)}
+                            >
                                 <MaterialIcons name="add" size={14} color={COLORS.textGray} />
-                                <Text style={styles.tagText}>Add tag</Text>
+                                <Text style={styles.tagText}>New</Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
-                    
                 </View>
 
             </ScrollView>
         </KeyboardAvoidingView>
+
+        {/* Add Tag Modal */}
+        <Modal
+          visible={showAddTagModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAddTagModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add New Tag</Text>
+                <TouchableOpacity onPress={() => setShowAddTagModal(false)}>
+                  <MaterialIcons name="close" size={24} color={COLORS.textGray} />
+                </TouchableOpacity>
+              </View>
+
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter tag name (e.g., motivation)"
+                placeholderTextColor="#9CA3AF"
+                value={newTagInput}
+                onChangeText={setNewTagInput}
+                autoFocus
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setShowAddTagModal(false);
+                    setNewTagInput('');
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.confirmButton]}
+                  onPress={handleAddNewTag}
+                >
+                  <Text style={styles.confirmButtonText}>Add Tag</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -224,21 +424,23 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(229, 231, 235, 0.5)',
     backgroundColor: 'transparent',
+    gap: 12,
   },
   closeButton: {
-    width: 40,
+    minWidth: 40,
     height: 40,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitleContainer: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 16,
@@ -253,15 +455,28 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   doneButton: {
-    width: 40,
+    minWidth: 50,
     height: 40,
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  doneButtonDisabled: {
+    opacity: 0.5,
   },
   doneButtonText: {
     color: COLORS.primary,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Manrope_700Bold',
+  },
+  titleInput: {
+    fontSize: 18,
+    fontFamily: 'Manrope_700Bold',
+    paddingHorizontal: 0,
+    paddingVertical: 8,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   scrollContent: {
     flexGrow: 1,
@@ -337,48 +552,158 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 24,
   },
-  tagsContainer: {
+  tagsLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontFamily: 'Manrope_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  selectedTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+    minHeight: 40,
+    alignContent: 'center',
+  },
+  selectedTag: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(25, 230, 25, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(25, 230, 25, 0.3)',
+  },
+  selectedTagText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  noTagsText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'Manrope_400Regular',
+  },
+  availableTagsLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontFamily: 'Manrope_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
     marginBottom: 16,
   },
   tag: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 28,
+    height: 32,
     paddingHorizontal: 12,
-    borderRadius: 999,
-  },
-  tagActive: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 28,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: 'rgba(25, 230, 25, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(25, 230, 25, 0.2)',
-  },
-  tagAdd: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 28,
-    paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: 16,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderStyle: 'dashed',
-    gap: 4,
+    borderColor: 'transparent',
+  },
+  tagSelected: {
+    borderColor: 'rgba(25, 230, 25, 0.3)',
+    backgroundColor: 'rgba(25, 230, 25, 0.1)',
   },
   tagText: {
     fontSize: 12,
     color: '#4B5563',
     fontFamily: 'Manrope_500Medium',
   },
-  tagTextActive: {
-    fontSize: 12,
+  tagTextSelected: {
     color: COLORS.primary,
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  tagAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderStyle: 'dashed',
+    gap: 4,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textMain,
+    fontFamily: 'Manrope_700Bold',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: 'Manrope_400Regular',
+    color: COLORS.textMain,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textGray,
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  confirmButton: {
+    backgroundColor: COLORS.primary,
+  },
+  confirmButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111811',
     fontFamily: 'Manrope_700Bold',
   },
   autosaveContainer: {

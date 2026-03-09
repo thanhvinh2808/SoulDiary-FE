@@ -11,7 +11,9 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
@@ -32,6 +34,14 @@ const AuthScreen = ({ onLoginSuccess }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // OTP Modal State
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [registrationEmail, setRegistrationEmail] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpModalSource, setOtpModalSource] = useState('auto'); // 'auto' for after register, 'manual' for manual verify
   
   // State Form
   const [fullName, setFullName] = useState('');
@@ -174,15 +184,11 @@ const AuthScreen = ({ onLoginSuccess }) => {
     try {
       if (isRegister) {
         await authService.register(fullName, emailInput, passwordInput);
-        Alert.alert(
-          'Success', 
-          'Account created successfully! Please log in.',
-          [{ text: 'OK', onPress: () => {
-            setIsRegister(false);
-            setFullName('');
-            setPasswordInput('');
-          }}]
-        );
+        // Show OTP modal for verification
+        setRegistrationEmail(emailInput);
+        setOtpModalSource('auto');
+        setShowOtpModal(true);
+        Alert.alert('Success', 'Account created! Please check your email for OTP code.');
       } else {
         const responseData = await authService.login(emailInput, passwordInput);
         onLoginSuccess(responseData.data?.user || responseData.user);
@@ -195,6 +201,91 @@ const AuthScreen = ({ onLoginSuccess }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 🔧 XỬ LÝ OTP VERIFICATION
+  const handleOtpVerification = async () => {
+    // Validate email
+    if (!registrationEmail || !registrationEmail.trim()) {
+      setOtpError('⚠️ Please enter your email address');
+      return;
+    }
+
+    // Validate OTP
+    if (!otp || otp.trim().length !== 6) {
+      setOtpError('⚠️ Please enter a valid 6-digit OTP code');
+      return;
+    }
+
+    setOtpLoading(true);
+    setOtpError('');
+    try {
+      console.log('🔐 Verifying OTP for:', registrationEmail);
+      
+      // Call OTP verification API
+      const response = await authService.verifyOtp(registrationEmail, otp);
+      
+      console.log('✅ OTP verified:', response);
+      
+      // Close modal and show success
+      setShowOtpModal(false);
+      setOtp('');
+      
+      // Reset form
+      setIsRegister(false);
+      setFullName('');
+      setEmailInput('');
+      setPasswordInput('');
+      setRegistrationEmail('');
+      
+      Alert.alert(
+        'Email Verified!', 
+        'Your email has been verified successfully. You can now log in.'
+      );
+    } catch (error) {
+      console.error('❌ OTP verification failed:', error);
+      const errorMsg = error.message || 'Invalid OTP. Please try again.';
+      setOtpError(`⚠️ ${errorMsg}`);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // 🔧 RESEND OTP
+  const handleResendOtp = async () => {
+    if (!registrationEmail || !registrationEmail.trim()) {
+      setOtpError('⚠️ Please enter your email address');
+      Alert.alert('Email Required', 'Please enter your email address before resending OTP');
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+      setOtpError('');
+      console.log('📧 Resending OTP to:', registrationEmail);
+      
+      // Call resend OTP API
+      await authService.resendOtp(registrationEmail);
+      
+      Alert.alert('Success', 'OTP has been resent to your email. Check your inbox.');
+    } catch (error) {
+      console.error('❌ Resend OTP failed:', error);
+      const errorMsg = error.message || 'Failed to resend OTP';
+      setOtpError(`⚠️ ${errorMsg}`);
+      Alert.alert('Resend Failed', errorMsg);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // 🔧 MANUALLY OPEN OTP VERIFICATION
+  const handleOpenOtpModal = () => {
+    // Just open the modal directly - user can enter email in the modal
+    setOtpModalSource('manual');
+    setRegistrationEmail(''); // Clear email so user can enter one
+    setShowOtpModal(true);
+    setOtp('');
+    setOtpError('');
   };
 
   return (
@@ -352,11 +443,146 @@ const AuthScreen = ({ onLoginSuccess }) => {
                     : "Don't have an account? Sign Up"}
                 </Text>
               </TouchableOpacity>
+              
+              {/* Verify Email Option */}
+              <TouchableOpacity 
+                onPress={handleOpenOtpModal}
+                style={{ marginTop: 16 }}
+              >
+                <Text style={[styles.linkText, { fontSize: 13 }]}>
+                  📧 Verify Email with OTP
+                </Text>
+              </TouchableOpacity>
             </View>
 
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* OTP VERIFICATION MODAL */}
+      <Modal
+        visible={showOtpModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowOtpModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowOtpModal(false);
+                  setOtpModalSource('auto');
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons name="close" size={24} color={COLORS.textMain} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>
+                {otpModalSource === 'auto' ? 'Verify Your Email' : 'Verify Email with OTP'}
+              </Text>
+              <View style={{ width: 24 }} />
+            </View>
+
+            {/* Modal Body */}
+            <ScrollView 
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalIconContainer}>
+                <MaterialIcons name="mail-lock" size={60} color={COLORS.primary} />
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                {otpModalSource === 'auto' 
+                  ? "We've sent a verification code to"
+                  : "Enter your email to verify"}
+              </Text>
+              
+              {otpModalSource === 'auto' ? (
+                <Text style={styles.modalEmail}>{registrationEmail}</Text>
+              ) : (
+                <View style={[styles.inputBox, { marginVertical: 8 }]}>
+                  <MaterialIcons name="mail-outline" size={20} color="#A8A29E" />
+                  <TextInput 
+                    style={styles.input}
+                    placeholder="your.email@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={registrationEmail}
+                    onChangeText={setRegistrationEmail}
+                    editable={!otpLoading}
+                  />
+                </View>
+              )}
+
+              <Text style={styles.modalInstruction}>
+                {otpModalSource === 'auto'
+                  ? "Enter the 6-digit code below to verify your email and complete your registration."
+                  : "Enter the 6-digit verification code you received via email."}
+              </Text>
+
+              {/* OTP Input */}
+              <View style={styles.otpInputContainer}>
+                <TextInput
+                  style={[styles.otpInput, otpError && styles.otpInputError]}
+                  placeholder="000000"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={otp}
+                  onChangeText={(text) => {
+                    setOtp(text);
+                    if (otpError) setOtpError('');
+                  }}
+                  placeholderTextColor="#D4CCCC"
+                  editable={!otpLoading}
+                />
+              </View>
+
+              {otpError && (
+                <View style={styles.errorContainer}>
+                  <MaterialIcons name="error" size={18} color="#EF4444" />
+                  <Text style={styles.errorText}>{otpError}</Text>
+                </View>
+              )}
+
+              {/* Verify Button */}
+              <TouchableOpacity
+                style={[styles.verifyButton, (otpLoading || otp.length !== 6) && styles.buttonDisabled]}
+                onPress={handleOtpVerification}
+                disabled={otpLoading || otp.length !== 6}
+                activeOpacity={0.8}
+              >
+                {otpLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="check-circle" size={20} color="#FFFFFF" />
+                    <Text style={styles.verifyButtonText}>
+                      {otpModalSource === 'auto' ? 'Verify & Complete' : 'Verify Email'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Resend OTP */}
+              <View style={styles.resendContainer}>
+                <Text style={styles.resendText}>Didn't receive the code? </Text>
+                <TouchableOpacity 
+                  onPress={handleResendOtp}
+                  disabled={otpLoading}
+                >
+                  <Text style={[styles.resendLink, otpLoading && { opacity: 0.5 }]}>
+                    Resend OTP
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -499,7 +725,141 @@ const styles = StyleSheet.create({
     fontSize: 14, 
     fontWeight: '600', 
     color: COLORS.primary 
-  }
+  },
+  // OTP Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.backgroundLight,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: Dimensions.get('window').height * 0.85,
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textMain,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    gap: 16,
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#A8A29E',
+    textAlign: 'center',
+  },
+  modalEmail: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textMain,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalInstruction: {
+    fontSize: 13,
+    color: '#A8A29E',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  otpInputContainer: {
+    marginVertical: 16,
+  },
+  otpInput: {
+    height: 64,
+    borderWidth: 2,
+    borderColor: COLORS.borderLight,
+    borderRadius: 12,
+    fontSize: 32,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: COLORS.textMain,
+    letterSpacing: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  otpInputError: {
+    borderColor: '#EF4444',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+    marginVertical: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '500',
+    flex: 1,
+  },
+  verifyButton: {
+    backgroundColor: COLORS.primary,
+    height: 52,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 12,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  verifyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  resendContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 4,
+  },
+  resendText: {
+    fontSize: 13,
+    color: '#A8A29E',
+  },
+  resendLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+    textDecorationLine: 'underline',
+  },
 });
 
 export default AuthScreen;

@@ -34,7 +34,7 @@ const HomeScreen = ({ onNavigate }) => {
       // Tự động tạo Diary mặc định nếu chưa có (dành cho User mới)
       if (!diaries || diaries.length === 0) {
         try {
-           const newDiary = await diaryService.createDiary("My Journal", "Personal diary created automatically");
+           const newDiary = await diaryService.createDiary("My Journal", "Your journey begins here", "Personal diary created automatically");
            diaries = [newDiary];
         } catch (createError) {
            console.error("Failed to create default diary", createError);
@@ -48,7 +48,10 @@ const HomeScreen = ({ onNavigate }) => {
 
         // 2. Lấy Entries của Diary đó
         const diaryEntries = await diaryService.getEntries(firstDiary.id || firstDiary._id);
-        setEntries(Array.isArray(diaryEntries) ? diaryEntries : []);
+        const entriesArray = Array.isArray(diaryEntries) ? diaryEntries : [];
+        
+        console.log(`📊 Fetched ${entriesArray.length} entries from diary`, firstDiary._id);
+        setEntries(entriesArray);
       } else {
         // Trường hợp lỗi tạo diary hoặc ko có diary
         setEntries([]);
@@ -67,6 +70,14 @@ const HomeScreen = ({ onNavigate }) => {
 
   // Format Date: "2023-10-25..." -> Month: "OCT", Date: "25"
   const formatDate = (dateString) => {
+    if (!dateString) {
+      const today = new Date();
+      const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+      return {
+        month: months[today.getMonth()],
+        day: today.getDate().toString()
+      };
+    }
     const date = new Date(dateString);
     const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
     return {
@@ -75,19 +86,64 @@ const HomeScreen = ({ onNavigate }) => {
     };
   };
 
+  // Calculate stats from current entries
+  const getStatsFromEntries = () => {
+    const count = entries.length;
+    
+    // Calculate current streak from entries
+    let streak = 0;
+    if (count > 0) {
+      const entryDates = new Set();
+      entries.forEach(entry => {
+        const dateStr = entry.entryDate || entry.createdAt || entry.date;
+        if (dateStr) {
+          const date = new Date(dateStr);
+          const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+          entryDates.add(normalized.getTime());
+        }
+      });
+      
+      const dates = Array.from(entryDates).sort((a, b) => b - a);
+      const today = new Date();
+      const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+      const lastEntryTime = dates[0];
+      const daysDiff = Math.floor((todayNormalized - lastEntryTime) / (1000 * 60 * 60 * 24));
+      
+      if (daysDiff <= 1) {
+        let checkDate = lastEntryTime;
+        for (const entryTime of dates) {
+          if (entryTime === checkDate) {
+            streak++;
+            checkDate -= 1000 * 60 * 60 * 24;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+    
+    console.log(`📋 HomeScreen Stats - Entries: ${count}, Streak: ${streak}`);
+    return { count, streak };
+  };
+
   const getMoodIcon = (mood) => {
     switch (mood?.toLowerCase()) {
       case 'happy': return 'sentiment-very-satisfied';
       case 'sad': return 'sentiment-very-dissatisfied';
       case 'neutral': return 'sentiment-neutral';
+      case 'excited': return 'sentiment-satisfied';
+      case 'angry': return 'mood-bad';
       default: return 'sentiment-satisfied'; // default
     }
   };
 
   const getMoodColor = (mood) => {
     switch (mood?.toLowerCase()) {
-      case 'happy': return COLORS.primary;
-      case 'sad': return COLORS.textGray;
+      case 'happy': return '#22c55e'; // Green
+      case 'sad': return '#3b82f6'; // Blue
+      case 'neutral': return '#f59e0b'; // Orange
+      case 'excited': return '#ec4899'; // Pink
+      case 'angry': return '#ef4444'; // Red
       default: return COLORS.primary;
     }
   };
@@ -121,7 +177,9 @@ const HomeScreen = ({ onNavigate }) => {
   };
 
   const renderEntryItem = (item) => {
-    const { month, day } = formatDate(item.date);
+    // Use entryDate, createdAt, or date field
+    const dateToUse = item.entryDate || item.createdAt || item.date;
+    const { month, day } = formatDate(dateToUse);
     const moodIcon = getMoodIcon(item.mood);
     const moodColor = getMoodColor(item.mood);
 
@@ -136,7 +194,7 @@ const HomeScreen = ({ onNavigate }) => {
           <Text style={[styles.dateDay, isDark && { color: '#FFF' }]}>{day}</Text>
         </View>
         <View style={styles.entryContent}>
-          <Text style={[styles.entryTitle, themeStyles.textPrimary]} numberOfLines={1}>{item.title}</Text>
+          <Text style={[styles.entryTitle, themeStyles.textPrimary]} numberOfLines={1}>{item.title || 'Untitled'}</Text>
           <Text style={[styles.entrySubtitle, { color: COLORS.textGray }]} numberOfLines={1}>
             {item.content || 'No content preview'}
           </Text>
@@ -196,19 +254,23 @@ const HomeScreen = ({ onNavigate }) => {
             {/* Write Button */}
             <View style={styles.actionContainer}>
                 <TouchableOpacity 
-                  style={styles.writeButton} 
+                  style={[styles.writeButton, (loading || !currentDiaryId) && { opacity: 0.5 }]} 
                   onPress={() => onNavigate('NewEntry', { diaryId: currentDiaryId })}
+                  disabled={loading || !currentDiaryId}
                 >
                     <MaterialIcons name="edit-note" size={24} color="#111811" />
-                    <Text style={styles.writeButtonText}>Write Today's Story</Text>
+                    <Text style={styles.writeButtonText}>{loading ? 'Loading Diary...' : "Write Today's Story"}</Text>
                 </TouchableOpacity>
             </View>
 
             {/* Recent Entries Header */}
             <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, themeStyles.textPrimary]}>Recent Entries</Text>
-                <TouchableOpacity onPress={() => onNavigate('History')}>
-                    <Text style={styles.viewAllText}>VIEW ALL</Text>
+                <TouchableOpacity 
+                  onPress={() => onNavigate('History', { diaryId: currentDiaryId })}
+                  disabled={!currentDiaryId}
+                >
+                    <Text style={[styles.viewAllText, !currentDiaryId && { opacity: 0.5 }]}>VIEW ALL</Text>
                 </TouchableOpacity>
             </View>
 
@@ -235,15 +297,15 @@ const HomeScreen = ({ onNavigate }) => {
                   <MaterialIcons name="home" size={28} color={COLORS.primary} />
                   <Text style={[styles.navLabel, { color: COLORS.primary }]}>Home</Text>
              </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History')}>
+             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History', { diaryId: currentDiaryId })}>
                   <MaterialIcons name="menu-book" size={28} color="#A8A29E" />
                   <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Diary</Text>
              </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar')}>
+             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar', { diaryId: currentDiaryId })}>
                   <MaterialIcons name="calendar-today" size={28} color="#A8A29E" />
                   <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Calendar</Text>
              </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics')}>
+             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics', { diaryId: currentDiaryId })}>
                   <MaterialIcons name="analytics" size={28} color="#A8A29E" />
                   <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Insights</Text>
              </TouchableOpacity>
