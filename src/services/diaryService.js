@@ -110,9 +110,9 @@ export const diaryService = {
 
   // Restore a soft-deleted entry
   async restoreEntry(diaryId, entryId) {
-    // Use the entry ID for the restore endpoint
+    // Use the entry ID for the restore endpoint via query parameter
     const journalIdToRestore = entryId || diaryId;
-    const response = await api(`/journals/${journalIdToRestore}/restore`, {
+    const response = await api(`/journals?id=${journalIdToRestore}&action=restore`, {
       method: 'PATCH',
     });
     console.log('♻️ restoreEntry response:', response);

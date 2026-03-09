@@ -520,7 +520,7 @@ const AuthScreen = ({ onLoginSuccess }) => {
 
               <Text style={styles.modalInstruction}>
                 {otpModalSource === 'auto'
-                  ? "Enter the 6-digit code below to verify your email and complete your registration."
+                  ? "Enter the 6-digit code sent to your email below to complete your registration."
                   : "Enter the 6-digit verification code you received via email."}
               </Text>
 
