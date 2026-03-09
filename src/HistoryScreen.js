@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   TextInput,
@@ -14,7 +13,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 import { diaryService } from './services/diaryService';
@@ -97,6 +96,8 @@ const HistoryScreen = ({ onNavigate, params }) => {
   const [groupedSections, setGroupedSections] = useState([]);
   const [showDeleted, setShowDeleted] = useState(false); // Toggle for deleted entries
   const [restoringId, setRestoringId] = useState(null); // Track which entry is being restored
+  const [currentPage, setCurrentPage] = useState(1);
+  const ENTRIES_PER_PAGE = 5;
 
   const themeStyles = {
     container: { backgroundColor: COLORS.backgroundLight },
@@ -219,6 +220,20 @@ const HistoryScreen = ({ onNavigate, params }) => {
     )
   })).filter(section => section.data.length > 0);
 
+  // Flatten filtered sections for pagination
+  const allFilteredEntries = filteredSections.reduce((acc, section) => [...acc, ...section.data], []);
+  const totalPages = Math.ceil(allFilteredEntries.length / ENTRIES_PER_PAGE);
+  const startIndex = (currentPage - 1) * ENTRIES_PER_PAGE;
+  const paginatedEntries = allFilteredEntries.slice(startIndex, startIndex + ENTRIES_PER_PAGE);
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
+
   // Handle delete entry (soft delete)
   const handleDeleteEntry = (entryId) => {
     if (!diaryId) return;
@@ -283,7 +298,7 @@ const HistoryScreen = ({ onNavigate, params }) => {
 
   // Handle edit entry
   const handleEditEntry = (entryId) => {
-    onNavigate('NewEntry', { diaryId, entryId });
+    onNavigate('NewEntry', { diaryId, entryId, returnTo: 'History' });
   };
 
   const renderEntry = ({ item }) => (
@@ -373,10 +388,13 @@ const HistoryScreen = ({ onNavigate, params }) => {
                         placeholder="Search reflections..."
                         placeholderTextColor="#A8A29E"
                         value={searchText}
-                        onChangeText={setSearchText}
+                        onChangeText={(text) => {
+                          setSearchText(text);
+                          setCurrentPage(1); // Reset to page 1 on search
+                        }}
                     />
                 </View>
-                <TouchableOpacity style={styles.filterButton} onPress={() => loadEntries(diaryId, showDeleted)}>
+                <TouchableOpacity style={styles.filterButton} onPress={loadEntries}>
                     <MaterialIcons name="refresh" size={24} color="#57534E" />
                 </TouchableOpacity>
             </View>
@@ -388,6 +406,7 @@ const HistoryScreen = ({ onNavigate, params }) => {
                 onPress={() => {
                   const newState = !showDeleted;
                   setShowDeleted(newState);
+                  setCurrentPage(1); // Reset pagination
                   console.log(`🗑️ Trash toggle: ${newState ? 'ON (showing deleted)' : 'OFF (showing active)'}`);
                   // Reload entries with the new filter state
                   loadEntries(diaryId, newState);
@@ -410,33 +429,68 @@ const HistoryScreen = ({ onNavigate, params }) => {
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color={COLORS.primary} />
           </View>
+        ) : allFilteredEntries.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 40 }}>
+            <MaterialIcons name="book" size={48} color={COLORS.textGray} />
+            <Text style={{ color: COLORS.textGray, marginTop: 16, fontSize: 16 }}>
+              {searchText ? 'No entries found' : 'No entries yet'}
+            </Text>
+          </View>
         ) : (
-          <SectionList
-            sections={filteredSections}
-            keyExtractor={(item) => item.id}
-            renderItem={renderEntry}
-            renderSectionHeader={({ section: { title } }) => (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionHeaderText}>{title}</Text>
-              </View>
-            )}
+          <ScrollView 
+            style={{ flex: 1 }}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 40 }}>
-                <MaterialIcons name="book" size={48} color={COLORS.textGray} />
-                <Text style={{ color: COLORS.textGray, marginTop: 16, fontSize: 16 }}>
-                  {searchText ? 'No entries found' : 'No entries yet'}
-                </Text>
+          >
+            {/* Paginated Entries */}
+            {paginatedEntries.map(item => (
+              <View key={item.id}>
+                {renderEntry({ item })}
               </View>
-            }
-          />
+            ))}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <View style={styles.paginationContainer}>
+                <TouchableOpacity
+                  style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+                  onPress={handlePreviousPage}
+                  disabled={currentPage === 1}
+                >
+                  <MaterialIcons name="chevron-left" size={20} color={currentPage === 1 ? '#D1D5DB' : COLORS.primary} />
+                  <Text style={[styles.paginationButtonText, currentPage === 1 && styles.paginationButtonTextDisabled]}>
+                    Previous
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.pageIndicator}>
+                  <Text style={styles.pageIndicatorText}>
+                    Page {currentPage} of {totalPages}
+                  </Text>
+                  <Text style={styles.pageCountText}>
+                    ({startIndex + 1}-{Math.min(startIndex + ENTRIES_PER_PAGE, allFilteredEntries.length)} of {allFilteredEntries.length})
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
+                  onPress={handleNextPage}
+                  disabled={currentPage === totalPages}
+                >
+                  <Text style={[styles.paginationButtonText, currentPage === totalPages && styles.paginationButtonTextDisabled]}>
+                    Next
+                  </Text>
+                  <MaterialIcons name="chevron-right" size={20} color={currentPage === totalPages ? '#D1D5DB' : COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
         )}
 
         {/* FAB */}
         <TouchableOpacity 
             style={styles.fab}
-            onPress={() => onNavigate('NewEntry', { diaryId })}
+            onPress={() => onNavigate('NewEntry', { diaryId, returnTo: 'History' })}
         >
             <MaterialIcons name="add" size={32} color="#112111" />
         </TouchableOpacity>
@@ -761,6 +815,59 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
     color: '#A8A29E',
+  },
+  paginationContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E7E5E4',
+  },
+  paginationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F4',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+  },
+  paginationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: COLORS.primary,
+  },
+  paginationButtonTextDisabled: {
+    color: '#D1D5DB',
+  },
+  pageIndicator: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  pageIndicatorText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#111811',
+  },
+  pageCountText: {
+    fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
+    color: '#A8A29E',
+    marginTop: 2,
   },
 });
 

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   TextInput,
   Platform,
@@ -16,7 +15,7 @@ import {
   Dimensions,
   Linking
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -41,6 +40,19 @@ const AuthScreen = ({ onLoginSuccess }) => {
   const [registrationEmail, setRegistrationEmail] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpModalSource, setOtpModalSource] = useState('auto'); // 'auto' for after register, 'manual' for manual verify
+  
+  // Forgot Password State
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordStep, setForgotPasswordStep] = useState('email'); // 'email', 'otp', 'reset'
+  const [forgotPasswordOtp, setForgotPasswordOtp] = useState('');
+  const [forgotPasswordError, setForgotPasswordError] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordToken, setForgotPasswordToken] = useState(''); // Temporary token from OTP
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   // State Form
   const [fullName, setFullName] = useState('');
@@ -89,7 +101,7 @@ const AuthScreen = ({ onLoginSuccess }) => {
       setLoading(true);
       
       const { API_URL } = require('./config');
-      const oauthUrl = `${API_URL}/auth/google-oauth?redirect=souldiary://oauth-callback`;
+      const oauthUrl = `${API_URL}/auth?action=google-oauth&redirect=souldiary://oauth-callback`;
       
       console.log('🔵 Opening Google OAuth browser:', oauthUrl);
       
@@ -113,7 +125,7 @@ const AuthScreen = ({ onLoginSuccess }) => {
       setLoading(true);
       
       const { API_URL } = require('./config');
-      const oauthUrl = `${API_URL}/auth/facebook-oauth?redirect=souldiary://oauth-callback`;
+      const oauthUrl = `${API_URL}/auth?action=facebook-oauth&redirect=souldiary://oauth-callback`;
       
       console.log('🔵 Opening Facebook OAuth browser:', oauthUrl);
       
@@ -139,14 +151,40 @@ const AuthScreen = ({ onLoginSuccess }) => {
       
       console.log(`✅ ${provider} login successful, token saved`);
       
-      // Create a minimal user object and proceed to home
-      // The token is already saved, so the app state will treat user as logged in
-      const user = { name: 'User', email: 'user@example.com', provider };
-      onLoginSuccess(user);
+      // Fetch actual user data from backend using the token
+      let currentUser;
+      try {
+        currentUser = await authService.getCurrentUser();
+        console.log(`✅ ${provider} user data fetched:`, currentUser);
+        
+        if (!currentUser) {
+          throw new Error('Failed to retrieve user data');
+        }
+        
+        // Ensure user has a name
+        if (!currentUser.name || currentUser.name.trim() === '') {
+          console.warn('⚠️ User has no name, extracting from email');
+          const nameFromEmail = currentUser.email?.split('@')[0] || 'User';
+          currentUser.name = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+        }
+      } catch (error) {
+        console.error(`⚠️ Failed to fetch user data after ${provider} OAuth:`, error);
+        // As fallback, create minimal user object with email from OAuth
+        // This prevents the app from getting stuck
+        currentUser = {
+          email: 'user@example.com',
+          name: 'User',
+          provider: provider
+        };
+        
+        Alert.alert('Note', `You've been logged in. Please refresh your profile if needed.`);
+      }
+      
+      // Call onLoginSuccess with user data (should never be null now)
+      onLoginSuccess(currentUser);
     } catch (error) {
-      console.error(`❌ ${provider} login failed:`, error);
+      console.error(`❌ ${provider} login critical error:`, error);
       Alert.alert('Login Failed', error.message || 'Could not complete login');
-    } finally {
       setLoading(false);
     }
   };
@@ -282,6 +320,142 @@ const AuthScreen = ({ onLoginSuccess }) => {
     setOtpError('');
   };
 
+  // 🔧 FORGOT PASSWORD - Step 1: Request OTP
+  const handleForgotPasswordRequest = async () => {
+    if (!forgotPasswordEmail.trim()) {
+      setForgotPasswordError('⚠️ Please enter your email address');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(forgotPasswordEmail)) {
+      setForgotPasswordError('⚠️ Please enter a valid email address');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError('');
+    try {
+      console.log('🔐 Requesting password reset OTP for:', forgotPasswordEmail);
+      await authService.forgotPassword(forgotPasswordEmail);
+      
+      console.log('✅ OTP sent to email');
+      setForgotPasswordStep('otp');
+      setForgotPasswordError('');
+    } catch (error) {
+      console.error('❌ Forgot password request failed:', error);
+      setForgotPasswordError(`⚠️ ${error.message || 'Failed to send OTP'}`);
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  // 🔧 FORGOT PASSWORD - Step 2: Verify OTP
+  const handleForgotPasswordOtpVerify = async () => {
+    if (!forgotPasswordOtp.trim() || forgotPasswordOtp.length !== 6) {
+      setForgotPasswordError('⚠️ Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError('');
+    try {
+      console.log('🔐 Verifying OTP for password reset');
+      const response = await authService.verifyOtp(forgotPasswordEmail, forgotPasswordOtp);
+      
+      console.log('✅ OTP verified, extracting temporary token');
+      
+      // Extract temporary token from response
+      const tempToken = response.token || response.data?.token;
+      if (tempToken) {
+        console.log(`🔑 Temporary token received: ${tempToken.substring(0, 20)}...`);
+        setForgotPasswordToken(tempToken);
+      }
+      
+      setForgotPasswordStep('reset');
+      setForgotPasswordOtp('');
+      setForgotPasswordError('');
+    } catch (error) {
+      console.error('❌ OTP verification failed:', error);
+      setForgotPasswordError(`⚠️ ${error.message || 'Invalid OTP'}`);
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  // 🔧 FORGOT PASSWORD - Step 3: Reset Password
+  const handleResetPassword = async () => {
+    if (!resetNewPassword.trim()) {
+      setForgotPasswordError('⚠️ Please enter a new password');
+      return;
+    }
+    if (resetNewPassword.length < 8) {
+      setForgotPasswordError('⚠️ Password must be at least 8 characters');
+      return;
+    }
+    if (!resetConfirmPassword.trim()) {
+      setForgotPasswordError('⚠️ Please confirm your password');
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      setForgotPasswordError('⚠️ Passwords do not match');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError('');
+    try {
+      console.log('🔐 Resetting password with temporary token');
+      await authService.resetPassword(resetNewPassword, resetConfirmPassword, forgotPasswordToken);
+      
+      console.log('✅ Password reset successfully');
+      Alert.alert('Success', 'Your password has been reset successfully. Please log in with your new password.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            setShowForgotPasswordModal(false);
+            // Reset forgot password state
+            setForgotPasswordEmail('');
+            setForgotPasswordOtp('');
+            setResetNewPassword('');
+            setResetConfirmPassword('');
+            setForgotPasswordToken('');
+            setForgotPasswordStep('email');
+            setForgotPasswordError('');
+          }
+        }
+      ]);
+    } catch (error) {
+      console.error('❌ Password reset failed:', error);
+      setForgotPasswordError(`⚠️ ${error.message || 'Failed to reset password'}`);
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  // 🔧 RESEND OTP (for forgot password)
+  const handleForgotPasswordResendOtp = async () => {
+    if (!forgotPasswordEmail.trim()) {
+      setForgotPasswordError('⚠️ Please enter your email address');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError('');
+    try {
+      console.log('📧 Resending OTP to:', forgotPasswordEmail);
+      await authService.resendOtp(forgotPasswordEmail);
+      
+      Alert.alert('Success', 'OTP has been resent to your email');
+      setForgotPasswordError('');
+    } catch (error) {
+      console.error('❌ Resend OTP failed:', error);
+      setForgotPasswordError(`⚠️ ${error.message || 'Failed to resend OTP'}`);
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -387,6 +561,25 @@ const AuthScreen = ({ onLoginSuccess }) => {
                   </Text>
                 )}
               </TouchableOpacity>
+
+              {/* Forgot Password Link */}
+              {!isRegister && (
+                <TouchableOpacity 
+                  onPress={() => {
+                    setShowForgotPasswordModal(true);
+                    setForgotPasswordStep('email');
+                    setForgotPasswordEmail('');
+                    setForgotPasswordOtp('');
+                    setResetNewPassword('');
+                    setResetConfirmPassword('');
+                    setForgotPasswordToken('');
+                    setForgotPasswordError('');
+                  }}
+                  style={{ marginTop: 12 }}
+                >
+                  <Text style={styles.forgotPasswordLink}>Forgot Password?</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* DIVIDER */}
@@ -399,22 +592,22 @@ const AuthScreen = ({ onLoginSuccess }) => {
             {/* SOCIAL BUTTONS */}
             <View style={styles.socialRow}>
               <TouchableOpacity 
-                style={[styles.socialBtn, (!fRequest || loading) && styles.buttonDisabled]} 
+                style={[styles.socialBtn, loading && styles.buttonDisabled]} 
                 onPress={() => {
-                  promptFacebookAsync();
+                  handleFacebookLogin();
                 }}
-                disabled={!fRequest || loading}
+                disabled={loading}
                 activeOpacity={0.7}
               >
                 <FontAwesome name="facebook" size={24} color="#1877F2" />
               </TouchableOpacity>
 
               <TouchableOpacity 
-                style={[styles.socialBtn, (!gRequest || loading) && styles.buttonDisabled]}
+                style={[styles.socialBtn, loading && styles.buttonDisabled]}
                 onPress={() => {
                   handleGoogleLogin();
                 }}
-                disabled={!gRequest || loading}
+                disabled={loading}
                 activeOpacity={0.7}
               >
                 <FontAwesome name="google" size={24} color="#DB4437" />
@@ -452,6 +645,278 @@ const AuthScreen = ({ onLoginSuccess }) => {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* FORGOT PASSWORD MODAL */}
+      <Modal
+        visible={showForgotPasswordModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowForgotPasswordModal(false);
+          setForgotPasswordStep('email');
+          setForgotPasswordEmail('');
+          setForgotPasswordOtp('');
+          setResetNewPassword('');
+          setResetConfirmPassword('');
+          setForgotPasswordToken('');
+          setForgotPasswordError('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowForgotPasswordModal(false);
+                  setForgotPasswordStep('email');
+                  setForgotPasswordEmail('');
+                  setForgotPasswordOtp('');
+                  setResetNewPassword('');
+                  setResetConfirmPassword('');
+                  setForgotPasswordToken('');
+                  setForgotPasswordError('');
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons name="close" size={24} color={COLORS.textMain} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Reset Password</Text>
+              <View style={{ width: 24 }} />
+            </View>
+
+            {/* Modal Body */}
+            <ScrollView 
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* STEP 1: EMAIL INPUT */}
+              {forgotPasswordStep === 'email' && (
+                <>
+                  <View style={styles.modalIconContainer}>
+                    <MaterialIcons name="lock-reset" size={60} color={COLORS.primary} />
+                  </View>
+
+                  <Text style={styles.modalSubtitle}>Reset Your Password</Text>
+                  <Text style={styles.modalInstruction}>
+                    Enter your email address and we'll send you a verification code to reset your password.
+                  </Text>
+
+                  <View style={[styles.inputBox, { marginVertical: 16 }]}>
+                    <MaterialIcons name="mail-outline" size={20} color="#A8A29E" />
+                    <TextInput 
+                      style={styles.input}
+                      placeholder="your.email@example.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      value={forgotPasswordEmail}
+                      onChangeText={(text) => {
+                        setForgotPasswordEmail(text);
+                        if (forgotPasswordError) setForgotPasswordError('');
+                      }}
+                      editable={!forgotPasswordLoading}
+                    />
+                  </View>
+
+                  {forgotPasswordError && (
+                    <View style={styles.errorContainer}>
+                      <MaterialIcons name="error" size={18} color="#EF4444" />
+                      <Text style={styles.errorText}>{forgotPasswordError}</Text>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.verifyButton, forgotPasswordLoading && styles.buttonDisabled]}
+                    onPress={handleForgotPasswordRequest}
+                    disabled={forgotPasswordLoading}
+                    activeOpacity={0.8}
+                  >
+                    {forgotPasswordLoading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="send" size={20} color="#FFFFFF" />
+                        <Text style={styles.verifyButtonText}>Send OTP</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* STEP 2: OTP VERIFICATION */}
+              {forgotPasswordStep === 'otp' && (
+                <>
+                  <View style={styles.modalIconContainer}>
+                    <MaterialIcons name="mail-lock" size={60} color={COLORS.primary} />
+                  </View>
+
+                  <Text style={styles.modalSubtitle}>Verify Your Email</Text>
+                  <Text style={styles.modalEmail}>{forgotPasswordEmail}</Text>
+                  
+                  <Text style={styles.modalInstruction}>
+                    We sent a 6-digit verification code to your email. Enter it below to continue.
+                  </Text>
+
+                  <View style={styles.otpInputContainer}>
+                    <TextInput
+                      style={[styles.otpInput, forgotPasswordError && styles.otpInputError]}
+                      placeholder="000000"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      value={forgotPasswordOtp}
+                      onChangeText={(text) => {
+                        setForgotPasswordOtp(text);
+                        if (forgotPasswordError) setForgotPasswordError('');
+                      }}
+                      placeholderTextColor="#D4CCCC"
+                      editable={!forgotPasswordLoading}
+                    />
+                  </View>
+
+                  {forgotPasswordError && (
+                    <View style={styles.errorContainer}>
+                      <MaterialIcons name="error" size={18} color="#EF4444" />
+                      <Text style={styles.errorText}>{forgotPasswordError}</Text>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.verifyButton, (forgotPasswordLoading || forgotPasswordOtp.length !== 6) && styles.buttonDisabled]}
+                    onPress={handleForgotPasswordOtpVerify}
+                    disabled={forgotPasswordLoading || forgotPasswordOtp.length !== 6}
+                    activeOpacity={0.8}
+                  >
+                    {forgotPasswordLoading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="check-circle" size={20} color="#FFFFFF" />
+                        <Text style={styles.verifyButtonText}>Verify OTP</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  <View style={styles.resendContainer}>
+                    <Text style={styles.resendText}>Didn't receive the code? </Text>
+                    <TouchableOpacity 
+                      onPress={handleForgotPasswordResendOtp}
+                      disabled={forgotPasswordLoading}
+                    >
+                      <Text style={[styles.resendLink, forgotPasswordLoading && { opacity: 0.5 }]}>
+                        Resend OTP
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              {/* STEP 3: PASSWORD RESET */}
+              {forgotPasswordStep === 'reset' && (
+                <>
+                  <View style={styles.modalIconContainer}>
+                    <MaterialIcons name="shield" size={60} color={COLORS.primary} />
+                  </View>
+
+                  <Text style={styles.modalSubtitle}>Create New Password</Text>
+                  <Text style={styles.modalInstruction}>
+                    Enter a strong new password to secure your account.
+                  </Text>
+
+                  {/* New Password */}
+                  <View style={[styles.formGroup, { marginTop: 16 }]}>
+                    <Text style={styles.label}>New Password</Text>
+                    <View style={styles.passwordInputContainer}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Enter new password (min. 8 characters)"
+                        placeholderTextColor="#D1D5DB"
+                        secureTextEntry={!showNewPassword}
+                        value={resetNewPassword}
+                        onChangeText={(text) => {
+                          setResetNewPassword(text);
+                          if (forgotPasswordError) setForgotPasswordError('');
+                        }}
+                        editable={!forgotPasswordLoading}
+                      />
+                      <TouchableOpacity 
+                        onPress={() => setShowNewPassword(!showNewPassword)}
+                        disabled={forgotPasswordLoading}
+                      >
+                        <MaterialIcons 
+                          name={showNewPassword ? 'visibility' : 'visibility-off'} 
+                          size={20} 
+                          color={COLORS.primary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Confirm Password */}
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Confirm Password</Text>
+                    <View style={styles.passwordInputContainer}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Confirm your new password"
+                        placeholderTextColor="#D1D5DB"
+                        secureTextEntry={!showConfirmPassword}
+                        value={resetConfirmPassword}
+                        onChangeText={(text) => {
+                          setResetConfirmPassword(text);
+                          if (forgotPasswordError) setForgotPasswordError('');
+                        }}
+                        editable={!forgotPasswordLoading}
+                      />
+                      <TouchableOpacity 
+                        onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                        disabled={forgotPasswordLoading}
+                      >
+                        <MaterialIcons 
+                          name={showConfirmPassword ? 'visibility' : 'visibility-off'} 
+                          size={20} 
+                          color={COLORS.primary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Password Requirements */}
+                  <View style={styles.requirementsBox}>
+                    <Text style={styles.requirementsTitle}>Password Requirements:</Text>
+                    <Text style={styles.requirementItem}>✓ At least 8 characters long</Text>
+                    <Text style={styles.requirementItem}>✓ Passwords must match</Text>
+                  </View>
+
+                  {forgotPasswordError && (
+                    <View style={styles.errorContainer}>
+                      <MaterialIcons name="error" size={18} color="#EF4444" />
+                      <Text style={styles.errorText}>{forgotPasswordError}</Text>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.verifyButton, forgotPasswordLoading && styles.buttonDisabled]}
+                    onPress={handleResetPassword}
+                    disabled={forgotPasswordLoading}
+                    activeOpacity={0.8}
+                  >
+                    {forgotPasswordLoading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="lock" size={20} color="#FFFFFF" />
+                        <Text style={styles.verifyButtonText}>Reset Password</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* OTP VERIFICATION MODAL */}
       <Modal
@@ -720,6 +1185,13 @@ const styles = StyleSheet.create({
     fontWeight: '600', 
     color: COLORS.primary 
   },
+  forgotPasswordLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+  },
   // OTP Modal Styles
   modalOverlay: {
     flex: 1,
@@ -853,6 +1325,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.primary,
     textDecorationLine: 'underline',
+  },
+  // Forgot Password Modal Styles
+  formGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111811',
+    marginBottom: 8,
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  requirementsBox: {
+    backgroundColor: 'rgba(25, 230, 25, 0.08)',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  requirementsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111811',
+    marginBottom: 8,
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  requirementItem: {
+    fontSize: 12,
+    color: '#A8A29E',
+    lineHeight: 18,
+    fontFamily: 'Manrope_400Regular',
   },
 });
 

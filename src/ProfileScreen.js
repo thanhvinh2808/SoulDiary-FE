@@ -4,20 +4,22 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   Dimensions,
   Image,
   ActivityIndicator,
   Alert,
-  Platform
+  Platform,
+  Switch
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { authService } from './services/authService';
 import { diaryService } from './services/diaryService';
+import { useTheme } from './context/ThemeContext';
+import ChangePasswordScreen from './ChangePasswordScreen';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 375;
@@ -25,10 +27,12 @@ const isMediumScreen = width >= 375 && width < 450;
 const isTablet = width >= 768;
 
 const ProfileScreen = ({ onNavigate }) => {
-  const isDark = false;
+  const { isDark, toggleTheme } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [stats, setStats] = useState({
     entries: 0,
     streaks: 0,
@@ -194,7 +198,7 @@ const ProfileScreen = ({ onNavigate }) => {
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: themeColors.background }]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
@@ -202,15 +206,25 @@ const ProfileScreen = ({ onNavigate }) => {
 
   if (!user) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={styles.errorText}>User data not found</Text>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: themeColors.background }]}>
+        <Text style={[styles.errorText, { color: themeColors.text }]}>User data not found</Text>
       </View>
     );
   }
 
+  // Show ChangePasswordScreen if requested
+  if (showChangePassword) {
+    return (
+      <ChangePasswordScreen 
+        onNavigate={onNavigate}
+        onClose={() => setShowChangePassword(false)}
+      />
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={themeColors.statusBarStyle} backgroundColor={themeColors.background} />
       <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         <ScrollView 
           showsVerticalScrollIndicator={false}
@@ -255,26 +269,26 @@ const ProfileScreen = ({ onNavigate }) => {
           </View>
 
           {/* User Info */}
-          <View style={styles.userInfoSection}>
-            <Text style={styles.userName}>{user.name || 'User'}</Text>
-            <Text style={styles.userEmail}>{user.email}</Text>
+          <View style={[styles.userInfoSection, { backgroundColor: themeColors.background }]}>
+            <Text style={[styles.userName, { color: themeColors.text }]}>{user.name || 'User'}</Text>
+            <Text style={[styles.userEmail, { color: themeColors.textMuted }]}>{user.email}</Text>
             {user.phone ? (
-              <Text style={styles.userHandle}>📱 {user.phone}</Text>
+              <Text style={[styles.userHandle, { color: themeColors.textMuted }]}>📱 {user.phone}</Text>
             ) : (
-              <Text style={styles.userPlaceholder}>No phone number added</Text>
+              <Text style={[styles.userPlaceholder, { color: themeColors.textMuted }]}>No phone number added</Text>
             )}
             {user.bio ? (
-              <Text style={styles.userBio}>{user.bio}</Text>
+              <Text style={[styles.userBio, { color: themeColors.text }]}>{user.bio}</Text>
             ) : (
-              <Text style={styles.userPlaceholder}>No bio added yet</Text>
+              <Text style={[styles.userPlaceholder, { color: themeColors.textMuted }]}>No bio added yet</Text>
             )}
             {user.createdAt && (
-              <Text style={styles.userMemberSince}>
+              <Text style={[styles.userMemberSince, { color: themeColors.textMuted }]}>
                 Member since {new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
               </Text>
             )}
             {user.isVerified && (
-              <View style={styles.verificationBadge}>
+              <View style={[styles.verificationBadge, { backgroundColor: isDark ? 'rgba(25, 230, 25, 0.15)' : 'rgba(25, 230, 25, 0.1)' }]}>
                 <MaterialIcons name="verified" size={14} color={COLORS.primary} />
                 <Text style={styles.verificationText}>Verified</Text>
               </View>
@@ -282,64 +296,90 @@ const ProfileScreen = ({ onNavigate }) => {
           </View>
 
           {/* Stats Grid */}
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
+          <View style={[styles.statsGrid, { backgroundColor: themeColors.background }]}>
+            <View style={[styles.statCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <Text style={styles.statValue}>{stats.entries}</Text>
-              <Text style={styles.statLabel}>Entries</Text>
+              <Text style={[styles.statLabel, { color: themeColors.textMuted }]}>Entries</Text>
             </View>
-            <View style={styles.statCard}>
+            <View style={[styles.statCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <Text style={styles.statValue}>{stats.streaks}</Text>
-              <Text style={styles.statLabel}>Current Streak</Text>
+              <Text style={[styles.statLabel, { color: themeColors.textMuted }]}>Current Streak</Text>
             </View>
-            <View style={styles.statCard}>
+            <View style={[styles.statCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <Text style={styles.statValue}>{stats.bestStreak}</Text>
-              <Text style={styles.statLabel}>Best Streak</Text>
+              <Text style={[styles.statLabel, { color: themeColors.textMuted }]}>Best Streak</Text>
             </View>
           </View>
 
           {/* Settings Section */}
-          <View style={styles.settingsSection}>
-            <View style={styles.settingsDivider} />
+          <View style={[styles.settingsSection, { backgroundColor: themeColors.background }]}>
+            <View style={[styles.settingsDivider, { backgroundColor: themeColors.border }]} />
             
             <TouchableOpacity 
-              style={styles.settingItem}
+              style={[styles.settingItem, { backgroundColor: themeColors.surface }]}
               onPress={() => onNavigate('EditProfile', { user })}
             >
               <View style={styles.settingContent}>
                 <MaterialIcons name="person-outline" size={20} color={COLORS.primary} />
-                <Text style={styles.settingText}>Edit Profile</Text>
+                <Text style={[styles.settingText, { color: themeColors.text }]}>Edit Profile</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={COLORS.textLightGray} />
+              <MaterialIcons name="chevron-right" size={20} color={themeColors.textMuted} />
             </TouchableOpacity>
-
-            <TouchableOpacity style={styles.settingItem}>
-              <View style={styles.settingContent}>
-                <MaterialIcons name="notifications" size={20} color={COLORS.primary} />
-                <Text style={styles.settingText}>Notifications</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={COLORS.textLightGray} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.settingItem}>
-              <View style={styles.settingContent}>
-                <MaterialIcons name="privacy-tip" size={20} color={COLORS.primary} />
-                <Text style={styles.settingText}>Privacy & Security</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={COLORS.textLightGray} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.settingItem}>
-              <View style={styles.settingContent}>
-                <MaterialIcons name="help-outline" size={20} color={COLORS.primary} />
-                <Text style={styles.settingText}>Help & Support</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={COLORS.textLightGray} />
-            </TouchableOpacity>
-
-            <View style={styles.settingsDivider} />
 
             <TouchableOpacity 
-              style={[styles.settingItem, styles.logoutItem]}
+              style={[styles.settingItem, { backgroundColor: themeColors.surface }]}
+              onPress={() => setShowChangePassword(true)}
+            >
+              <View style={styles.settingContent}>
+                <MaterialIcons name="lock" size={20} color={COLORS.primary} />
+                <Text style={[styles.settingText, { color: themeColors.text }]}>Change Password</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={themeColors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={[styles.settingItem, styles.themeToggleItem, { backgroundColor: themeColors.surface }]}>
+              <View style={styles.settingContent}>
+                <MaterialIcons name={isDark ? "dark-mode" : "light-mode"} size={20} color={COLORS.primary} />
+                <Text style={[styles.settingText, { color: themeColors.text }]}>
+                  {isDark ? 'Dark Mode' : 'Light Mode'}
+                </Text>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: '#E5E5E5', true: COLORS.primary + '50' }}
+                thumbColor={isDark ? COLORS.primary : '#F0F0F0'}
+              />
+            </View>
+
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface }]}>
+              <View style={styles.settingContent}>
+                <MaterialIcons name="notifications" size={20} color={COLORS.primary} />
+                <Text style={[styles.settingText, { color: themeColors.text }]}>Notifications</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={themeColors.textMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface }]}>
+              <View style={styles.settingContent}>
+                <MaterialIcons name="privacy-tip" size={20} color={COLORS.primary} />
+                <Text style={[styles.settingText, { color: themeColors.text }]}>Privacy & Security</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={themeColors.textMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface }]}>
+              <View style={styles.settingContent}>
+                <MaterialIcons name="help-outline" size={20} color={COLORS.primary} />
+                <Text style={[styles.settingText, { color: themeColors.text }]}>Help & Support</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={themeColors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={[styles.settingsDivider, { backgroundColor: themeColors.border }]} />
+
+            <TouchableOpacity 
+              style={[styles.settingItem, styles.logoutItem, { backgroundColor: themeColors.surface }]}
               onPress={handleLogout}
             >
               <View style={styles.settingContent}>
@@ -359,7 +399,6 @@ const ProfileScreen = ({ onNavigate }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundLight,
   },
   scrollContent: {
     flexGrow: 1,
@@ -393,12 +432,12 @@ const styles = StyleSheet.create({
     width: isSmallScreen ? 100 : 120,
     height: isSmallScreen ? 100 : 120,
     borderRadius: isSmallScreen ? 50 : 60,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
     borderColor: COLORS.backgroundLight,
     overflow: 'hidden',
+    backgroundColor: COLORS.cardLight,
   },
   editButton: {
     position: 'absolute',
@@ -422,24 +461,20 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: isSmallScreen ? 24 : 28,
     fontWeight: '800',
-    color: COLORS.textMain,
     marginBottom: 4,
   },
   userHandle: {
     fontSize: isSmallScreen ? 14 : 16,
     fontWeight: '600',
-    color: COLORS.textLightGray,
     marginBottom: isSmallScreen ? 8 : 12,
   },
   userPlaceholder: {
     fontSize: isSmallScreen ? 13 : 14,
-    color: COLORS.textLightGray,
     fontStyle: 'italic',
     marginBottom: isSmallScreen ? 8 : 12,
   },
   userBio: {
     fontSize: isSmallScreen ? 12 : 14,
-    color: COLORS.textGray,
     textAlign: 'center',
     marginBottom: 8,
     maxWidth: '90%',
@@ -447,12 +482,10 @@ const styles = StyleSheet.create({
   },
   userEmail: {
     fontSize: isSmallScreen ? 11 : 12,
-    color: COLORS.textLightGray,
     marginBottom: 8,
   },
   userMemberSince: {
     fontSize: isSmallScreen ? 10 : 11,
-    color: COLORS.textGray,
     marginTop: 4,
   },
   verificationBadge: {
@@ -479,12 +512,10 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.beigeAccent,
     borderRadius: 12,
     padding: isSmallScreen ? 12 : 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   statValue: {
     fontSize: isSmallScreen ? 20 : 24,
@@ -504,7 +535,6 @@ const styles = StyleSheet.create({
   },
   settingsDivider: {
     height: 1,
-    backgroundColor: COLORS.borderLight,
     marginVertical: isSmallScreen ? 12 : 16,
   },
   settingItem: {
@@ -514,6 +544,10 @@ const styles = StyleSheet.create({
     paddingVertical: isSmallScreen ? 12 : 16,
     paddingHorizontal: isSmallScreen ? 8 : 12,
     borderRadius: 12,
+    marginBottom: 8,
+  },
+  themeToggleItem: {
+    justifyContent: 'space-between',
   },
   settingContent: {
     flexDirection: 'row',
@@ -524,7 +558,6 @@ const styles = StyleSheet.create({
   settingText: {
     fontSize: isSmallScreen ? 13 : 15,
     fontWeight: '600',
-    color: COLORS.textMain,
   },
   logoutItem: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -538,7 +571,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: COLORS.textMain,
   }
 });
 
