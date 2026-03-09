@@ -131,9 +131,11 @@ const HomeScreen = ({ onNavigate }) => {
       case 'happy': return 'sentiment-very-satisfied';
       case 'sad': return 'sentiment-very-dissatisfied';
       case 'neutral': return 'sentiment-neutral';
-      case 'excited': return 'sentiment-satisfied';
-      case 'angry': return 'mood-bad';
-      default: return 'sentiment-satisfied'; // default
+      case 'excited': return 'sentiment-very-satisfied';
+      case 'angry': return 'sentiment-very-dissatisfied';
+      case 'anxious': return 'sentiment-dissatisfied';
+      case 'tired': return 'bedtime';
+      default: return 'sentiment-neutral'; // default
     }
   };
 
@@ -144,6 +146,8 @@ const HomeScreen = ({ onNavigate }) => {
       case 'neutral': return '#f59e0b'; // Orange
       case 'excited': return '#ec4899'; // Pink
       case 'angry': return '#ef4444'; // Red
+      case 'anxious': return '#d946ef'; // Purple
+      case 'tired': return '#6366f1'; // Indigo
       default: return COLORS.primary;
     }
   };
