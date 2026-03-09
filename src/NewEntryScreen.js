@@ -42,14 +42,49 @@ const NewEntryScreen = ({ onClose, route, ...props }) => {
   const [loading, setLoading] = useState(false);
   const [loadingEntry, setLoadingEntry] = useState(false);
   
-  // Tags state
+  // Tags state - organized by category
   const [selectedTags, setSelectedTags] = useState([]);
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
-  const [availableTags, setAvailableTags] = useState([
-    'reflection', 'morning', 'evening', 'grateful', 'challenge', 'success',
-    'self-care', 'creative', 'work', 'personal', 'health', 'family'
-  ]);
+  const [expandedTagCategories, setExpandedTagCategories] = useState({
+    development: false,
+    wellness: false,
+    relationships: false,
+    work: false,
+    creative: false,
+    time: false,
+  });
+  
+  const tagCategories = {
+    development: {
+      label: 'Personal Development',
+      tags: ['personal', 'growth', 'achievement', 'challenge', 'success', 'reflection']
+    },
+    wellness: {
+      label: 'Emotional & Wellness',
+      tags: ['healing', 'health', 'self-care', 'gratitude']
+    },
+    relationships: {
+      label: 'Relationships',
+      tags: ['relationships', 'family']
+    },
+    work: {
+      label: 'Work & Career',
+      tags: ['work', 'career']
+    },
+    creative: {
+      label: 'Creative',
+      tags: ['creative']
+    },
+    time: {
+      label: 'Time of Day',
+      tags: ['morning', 'evening']
+    }
+  };
+
+  const getAllAvailableTags = () => {
+    return Object.values(tagCategories).flatMap(cat => cat.tags);
+  };
 
   // Initialize diaryId if not provided
   useEffect(() => {
@@ -330,31 +365,51 @@ const NewEntryScreen = ({ onClose, route, ...props }) => {
 
                     <Text style={styles.availableTagsLabel}>AVAILABLE TAGS</Text>
                     <View style={styles.tagsContainer}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                            {availableTags.map(tag => {
-                              const isSelected = selectedTags.includes(tag);
-                              return (
-                                <TouchableOpacity 
-                                  key={tag}
-                                  style={[
-                                    styles.tag,
-                                    isSelected && styles.tagSelected,
-                                    { backgroundColor: isSelected ? 'rgba(25, 230, 25, 0.1)' : themeStyles.tagBg }
-                                  ]}
-                                  onPress={() => toggleTag(tag)}
-                                >
-                                  <Text style={[styles.tagText, isSelected && styles.tagTextSelected]}>#{tag}</Text>
-                                </TouchableOpacity>
-                              );
-                            })}
-                            <TouchableOpacity 
-                              style={styles.tagAdd}
-                              onPress={() => setShowAddTagModal(true)}
-                            >
-                                <MaterialIcons name="add" size={14} color={COLORS.textGray} />
-                                <Text style={styles.tagText}>New</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
+                      {Object.entries(tagCategories).map(([categoryKey, category]) => (
+                        <View key={categoryKey} style={styles.tagCategory}>
+                          <TouchableOpacity 
+                            style={styles.tagCategoryHeader}
+                            onPress={() => setExpandedTagCategories(prev => ({
+                              ...prev,
+                              [categoryKey]: !prev[categoryKey]
+                            }))}
+                          >
+                            <MaterialIcons 
+                              name={expandedTagCategories[categoryKey] ? 'expand-less' : 'expand-more'} 
+                              size={20} 
+                              color={COLORS.primary} 
+                            />
+                            <Text style={styles.tagCategoryTitle}>{category.label}</Text>
+                          </TouchableOpacity>
+                          {expandedTagCategories[categoryKey] && (
+                            <View style={styles.tagCategoryContent}>
+                              {category.tags.map(tag => {
+                                const isSelected = selectedTags.includes(tag);
+                                return (
+                                  <TouchableOpacity 
+                                    key={tag}
+                                    style={[
+                                      styles.tag,
+                                      isSelected && styles.tagSelected,
+                                      { backgroundColor: isSelected ? 'rgba(25, 230, 25, 0.1)' : themeStyles.tagBg }
+                                    ]}
+                                    onPress={() => toggleTag(tag)}
+                                  >
+                                    <Text style={[styles.tagText, isSelected && styles.tagTextSelected]}>#{tag}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                      <TouchableOpacity 
+                        style={styles.tagAddButton}
+                        onPress={() => setShowAddTagModal(true)}
+                      >
+                        <MaterialIcons name="add" size={18} color={COLORS.primary} />
+                        <Text style={styles.tagAddButtonText}>Add Custom Tag</Text>
+                      </TouchableOpacity>
                     </View>
                 </View>
 
@@ -597,8 +652,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   tagsContainer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     marginBottom: 16,
+    gap: 0,
   },
   tag: {
     flexDirection: 'row',
@@ -634,6 +690,52 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     borderStyle: 'dashed',
     gap: 4,
+  },
+  tagCategory: {
+    marginBottom: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  tagCategoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  tagCategoryTitle: {
+    fontSize: 13,
+    fontFamily: 'Manrope_600SemiBold',
+    color: COLORS.textMain,
+    flex: 1,
+  },
+  tagCategoryContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 12,
+    gap: 8,
+  },
+  tagAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderStyle: 'dashed',
+    gap: 4,
+    marginTop: 8,
+  },
+  tagAddButtonText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontFamily: 'Manrope_600SemiBold',
   },
   // Modal styles
   modalOverlay: {
