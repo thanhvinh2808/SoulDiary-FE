@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  SafeAreaView,
   StatusBar,
   ScrollView,
   TextInput,
@@ -11,93 +12,23 @@ import {
   Image,
   Platform,
   ActivityIndicator,
-  Alert,
+  RefreshControl,
+  Alert
 } from 'react-native';
-import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from './theme';
 import { diaryService } from './services/diaryService';
 
-// Mapping for mood icons and colors
-const MOOD_MAP = {
-  happy: { icon: 'sentiment-very-satisfied', color: '#22c55e', bg: '#dcfce7' },
-  sad: { icon: 'sentiment-very-dissatisfied', color: '#3b82f6', bg: '#dbeafe' },
-  neutral: { icon: 'sentiment-neutral', color: '#f59e0b', bg: '#fef3c7' },
-  angry: { icon: 'sentiment-very-dissatisfied', color: '#ef4444', bg: '#fee2e2' },
-  anxious: { icon: 'sentiment-dissatisfied', color: '#d946ef', bg: '#f3e8ff' },
-  excited: { icon: 'sentiment-very-satisfied', color: '#ec4899', bg: '#fce7f3' },
-  tired: { icon: 'bedtime', color: '#6366f1', bg: '#e0e7ff' },
-};
-
-// Dummy fallback data (in case API fails)
-const FALLBACK_DATA = [
-  {
-    title: 'October 2023',
-    data: [
-      {
-        id: '1',
-        day: 'Mon, 24 Oct',
-        time: '10:30 AM',
-        content: 'Today I felt a lot of peace while walking in the park. I noticed the leaves are starting to change color and it felt like...',
-        moodIcon: 'sentiment-satisfied',
-        moodColor: '#CA8A04', // Yellow-600
-        moodBg: '#FEF9C3', // Yellow-100
-        tags: ['Nature', 'Peaceful'],
-      },
-      {
-        id: '2',
-        day: 'Sun, 23 Oct',
-        time: '08:15 AM',
-        content: 'Morning routine felt so grounded today. Made a fresh cup of coffee and just sat with my thoughts for twenty minutes.',
-        moodIcon: 'self-improvement', // self_care alternative
-        moodColor: '#2563EB', // Blue-600
-        moodBg: '#DBEAFE', // Blue-100
-        tags: ['Morning', 'Self-Care'],
-        image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBSWCz6VJCT33vV9dm9_9ZnxdaRYm6yvmyVYQIPNtzSPcEEkE5rB5My7MYONrf7AHGUE-XGAX8zONsf-rGc9Y8Ag6-6z6NrRJiOx6nFmC0v_SHJTVIr7nbZPdbUM9e8im5--upTwpwwDXZ7dPJHcjTeVVP3xxGv_IpF1s6bNQomBCL_J7r307g_fIsFshW1FIHlntpTedPkypfVs0dUx72O4HLcR3Z_M47go9jv4y9B9R6ejzcvlane4BdAq7L9ykgniOjo6-oiSqHM',
-      },
-      {
-        id: '3',
-        day: 'Fri, 21 Oct',
-        time: '09:45 PM',
-        content: 'Gratitude list for tonight: 1. The warm sun 2. A good talk with Sarah 3. Finishing that difficult project at work.',
-        moodIcon: 'auto-awesome',
-        moodColor: '#9333EA', // Purple-600
-        moodBg: '#F3E8FF', // Purple-100
-        tags: ['Gratitude'],
-      },
-    ],
-  },
-  {
-    title: 'September 2023',
-    data: [
-      {
-        id: '4',
-        day: 'Wed, 28 Sep',
-        time: '02:20 PM',
-        content: 'Felt a burst of creative energy this afternoon. Sketched out some ideas for the new living room layout.',
-        moodIcon: 'bolt',
-        moodColor: '#EA580C', // Orange-600
-        moodBg: '#FFEDD5', // Orange-100
-        tags: ['Creative', 'Home'],
-      },
-    ],
-  },
-];
-
-const HistoryScreen = ({ onNavigate, params }) => {
+const HistoryScreen = ({ onNavigate }) => {
   // FORCE LIGHT MODE
   const isDark = false;
-  const insets = useSafeAreaInsets();
-  const [diaryId, setDiaryId] = useState(params?.diaryId);
-  
-  const [entries, setEntries] = useState([]);
+  const insets = useSafeAreaInsets(); 
+
+  const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchText, setSearchText] = useState('');
-  const [groupedSections, setGroupedSections] = useState([]);
-  const [showDeleted, setShowDeleted] = useState(false); // Toggle for deleted entries
-  const [restoringId, setRestoringId] = useState(null); // Track which entry is being restored
-  const [currentPage, setCurrentPage] = useState(1);
-  const ENTRIES_PER_PAGE = 5;
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const themeStyles = {
     container: { backgroundColor: COLORS.backgroundLight },
@@ -107,260 +38,122 @@ const HistoryScreen = ({ onNavigate, params }) => {
     navBg: { backgroundColor: 'rgba(255, 255, 255, 0.95)' },
   };
 
-  // Helper function to convert mood to icon/color
-  const getMoodStyle = (mood) => {
-    return MOOD_MAP[mood?.toLowerCase()] || MOOD_MAP.neutral;
-  };
-
-  // Helper function to format date
-  const formatDate = (dateStr) => {
-    if (!dateStr) return { day: 'Unknown', time: 'Unknown' };
-    const date = new Date(dateStr);
-    const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    return { day: dayStr, time: timeStr };
-  };
-
-  // Helper function to group entries by month
-  const groupEntriesByMonth = (entriesArray) => {
-    const groups = {};
-    
-    entriesArray.forEach(entry => {
-      const date = new Date(entry.date || entry.createdAt);
-      const monthKey = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-      
-      if (!groups[monthKey]) {
-        groups[monthKey] = [];
-      }
-      
-      groups[monthKey].push({
-        id: entry.id || entry._id,
-        entryId: entry.id || entry._id,
-        diaryId: diaryId,
-        ...formatDate(entry.date || entry.createdAt),
-        title: entry.title || 'Untitled',
-        content: entry.content || '',
-        mood: entry.mood || 'neutral',
-        moodIcon: getMoodStyle(entry.mood).icon,
-        moodColor: getMoodStyle(entry.mood).color,
-        moodBg: getMoodStyle(entry.mood).bg,
-        tags: [],
-        date: entry.date || entry.createdAt,
-        isDeleted: entry.isDeleted === true, // Ensure boolean, default to false if not present
-      });
-    });
-
-    return Object.keys(groups)
-      .sort((a, b) => new Date(b) - new Date(a))
-      .map(month => ({
-        title: month,
-        data: groups[month]
-      }));
-  };
-
-  // Fetch entries from API
-  const loadEntries = useCallback(async (targetDiaryId, isShowingDeleted = false) => {
+  const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
-      let finalDiaryId = targetDiaryId || diaryId;
+      // Lấy toàn bộ journals (entries)
+      const data = await diaryService.getEntries({ limit: 100 }); // Lấy nhiều hơn cho history
       
-      // If no diaryId, fetch default diary
-      if (!finalDiaryId) {
-        console.log('⚠️ No diaryId provided, fetching default diary...');
-        const diaries = await diaryService.getDiaries();
-        if (diaries && diaries.length > 0) {
-          finalDiaryId = diaries[0].id || diaries[0]._id;
-          setDiaryId(finalDiaryId);
-        } else {
-          console.error('❌ No diaries found');
-          setEntries([]);
-          setGroupedSections([]);
-          return;
-        }
-      }
-      
-      console.log(`🔄 Loading entries (showDeleted=${isShowingDeleted})...`);
-      const fetchedEntries = await diaryService.getEntries(finalDiaryId, isShowingDeleted);
-      
-      // Debug: Log entry structure to see if isDeleted field exists
-      if (fetchedEntries && fetchedEntries.length > 0) {
-        console.log('📋 First entry structure:', {
-          hasIsDeleted: 'isDeleted' in fetchedEntries[0],
-          isDeletedValue: fetchedEntries[0].isDeleted,
-          entry: fetchedEntries[0]
+      if (Array.isArray(data)) {
+        // Group data by Month Year
+        const grouped = data.reduce((acc, entry) => {
+          // Backend field: entryDate
+          const date = new Date(entry.entryDate || entry.createdAt);
+          const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+          
+          if (!acc[monthYear]) {
+            acc[monthYear] = [];
+          }
+          acc[monthYear].push(entry);
+          return acc;
+        }, {});
+
+        const sectionsData = Object.keys(grouped).map(key => ({
+          title: key,
+          data: grouped[key].sort((a, b) => new Date(b.entryDate || b.createdAt) - new Date(a.entryDate || a.createdAt))
+        })).sort((a, b) => {
+           // Sort sections by date of first item
+           const dateA = new Date(a.data[0].entryDate || a.data[0].createdAt);
+           const dateB = new Date(b.data[0].entryDate || b.data[0].createdAt);
+           return dateB - dateA;
         });
-        console.log(`✅ Loaded ${fetchedEntries.length} entries`);
+
+        setSections(sectionsData);
       } else {
-        console.warn('⚠️ No entries returned');
+        setSections([]);
       }
-      
-      setEntries(Array.isArray(fetchedEntries) ? fetchedEntries : []);
-      const sections = groupEntriesByMonth(Array.isArray(fetchedEntries) ? fetchedEntries : []);
-      setGroupedSections(sections);
     } catch (error) {
-      console.error('❌ Failed to load entries:', error);
-      Alert.alert('Error', 'Failed to load entries: ' + error.message);
-      setEntries([]);
-      setGroupedSections([]);
+      console.error('Failed to fetch entries:', error);
+      Alert.alert('Error', 'Failed to load history');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [diaryId]);
+  }, []);
 
   useEffect(() => {
-    loadEntries(diaryId);
-  }, [diaryId, loadEntries]);
+    fetchData();
+  }, [fetchData]);
 
-  // Filter entries based on search (backend has already filtered by deleted status)
-  const filteredSections = groupedSections.map(section => ({
-    ...section,
-    data: section.data.filter(item => 
-      item.title.toLowerCase().includes(searchText.toLowerCase()) ||
-      item.content.toLowerCase().includes(searchText.toLowerCase())
-    )
-  })).filter(section => section.data.length > 0);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, [fetchData]);
 
-  // Flatten filtered sections for pagination
-  const allFilteredEntries = filteredSections.reduce((acc, section) => [...acc, ...section.data], []);
-  const totalPages = Math.ceil(allFilteredEntries.length / ENTRIES_PER_PAGE);
-  const startIndex = (currentPage - 1) * ENTRIES_PER_PAGE;
-  const paginatedEntries = allFilteredEntries.slice(startIndex, startIndex + ENTRIES_PER_PAGE);
-
-  const handlePreviousPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  const getMoodConfig = (mood) => {
+    switch (mood?.toLowerCase()) {
+      case 'happy': return { icon: 'sentiment-very-satisfied', color: '#19e619', bg: 'rgba(25, 230, 25, 0.1)' };
+      case 'sad': return { icon: 'sentiment-very-dissatisfied', color: '#4B5563', bg: '#F3F4F6' };
+      case 'angry': return { icon: 'sentiment-dissatisfied', color: '#EF4444', bg: '#FEE2E2' };
+      case 'anxious': return { icon: 'help-outline', color: '#F59E0B', bg: '#FEF3C7' };
+      default: return { icon: 'sentiment-neutral', color: '#9CA3AF', bg: '#F3F4F6' };
+    }
   };
 
-  const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return {
+      day: date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }),
+      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    };
   };
 
-  // Handle delete entry (soft delete)
-  const handleDeleteEntry = (entryId) => {
-    if (!diaryId) return;
-    
-    Alert.alert('Delete Entry', 'Move this entry to trash? You can restore it later.', [
-      { text: 'Cancel', onPress: () => {} },
-      {
-        text: 'Delete',
-        onPress: async () => {
-          try {
-            // Soft delete - set isDeleted flag
-            await diaryService.deleteEntry(diaryId, entryId);
-            console.log('✅ Entry soft deleted:', entryId);
-            loadEntries(); // Refresh list
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete entry');
-          }
-        },
-        style: 'destructive'
-      }
-    ]);
-  };
+  const renderEntry = ({ item }) => {
+    const { icon, color, bg } = getMoodConfig(item.mood);
+    const { day, time } = formatDate(item.entryDate || item.createdAt);
 
-  // Handle restore deleted entry
-  const handleRestoreEntry = (entryId) => {
-    if (!diaryId) return;
-    
-    Alert.alert('Restore Entry', 'Restore this entry to your journal?', [
-      { text: 'Cancel', onPress: () => {} },
-      {
-        text: 'Restore',
-        onPress: async () => {
-          try {
-            setRestoringId(entryId); // Show loading animation
-            if (diaryService.restoreEntry) {
-              await diaryService.restoreEntry(diaryId, entryId);
-            } else {
-              Alert.alert('Info', 'Restore functionality coming soon');
-              setRestoringId(null);
-              return;
-            }
-            console.log('✅ Entry restored:', entryId);
-            setRestoringId(null);
-            // Show success notification and navigate back
-            Alert.alert('Success', 'Entry restored to your journal!', [
-              {
-                text: 'OK',
-                onPress: () => {
-                  loadEntries(); // Refresh the history
-                  setShowDeleted(false); // Switch back to active entries
-                }
-              }
-            ]);
-          } catch (error) {
-            setRestoringId(null);
-            Alert.alert('Error', 'Failed to restore entry: ' + error.message);
-          }
-        }
-      }
-    ]);
-  };
-
-  // Handle edit entry
-  const handleEditEntry = (entryId) => {
-    onNavigate('NewEntry', { diaryId, entryId, returnTo: 'History' });
-  };
-
-  const renderEntry = ({ item }) => (
-    <View style={[styles.card, item.isDeleted && styles.cardDeleted]}>
-      <View style={styles.cardContent}>
-        <View style={styles.moodContainer}>
-          <View style={[styles.moodCircle, { backgroundColor: item.moodBg }, item.isDeleted && { opacity: 0.5 }]}>
-            <MaterialIcons name={item.moodIcon} size={28} color={item.moodColor} />
+    return (
+      <TouchableOpacity 
+        style={styles.card}
+        onPress={() => onNavigate('NewEntry', { entryId: item.id || item._id })}
+        activeOpacity={0.7}
+      >
+        {item.image && (
+          <Image source={{ uri: item.image }} style={styles.cardImage} />
+        )}
+        <View style={styles.cardContent}>
+          <View style={styles.moodContainer}>
+             <View style={[styles.moodCircle, { backgroundColor: bg }]}>
+               <MaterialIcons name={icon} size={28} color={color} />
+             </View>
+          </View>
+          
+          <View style={{ flex: 1 }}>
+              <View style={styles.cardHeader}>
+                  <Text style={styles.cardDay}>{day}</Text>
+                  <Text style={styles.cardTime}>{time}</Text>
+              </View>
+              <Text style={[styles.cardTitle, { color: COLORS.textMain }]}>{item.title || 'Untitled'}</Text>
+              <Text style={styles.cardText} numberOfLines={2}>
+                  {item.content || 'No content'}
+              </Text>
+              {/* Tags from backend */}
+              <View style={styles.tagsRow}>
+                  {item.tags && item.tags.map((tag, idx) => (
+                      <View key={idx} style={styles.tag}>
+                          <Text style={styles.tagText}>{tag}</Text>
+                      </View>
+                  ))}
+                  {(!item.tags || item.tags.length === 0) && (
+                      <View style={[styles.tag, { backgroundColor: 'transparent', paddingLeft: 0 }]}>
+                          <Text style={[styles.tagText, { color: '#A8A29E', fontWeight: '500' }]}>No tags</Text>
+                      </View>
+                  )}
+              </View>
           </View>
         </View>
-        
-        <View style={{ flex: 1 }}>
-          <View style={styles.cardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.cardDay, item.isDeleted && styles.textDeleted]}>{item.title}</Text>
-              <Text style={[styles.cardDayLabel, item.isDeleted && { opacity: 0.5 }]}>{item.day} • {item.time}</Text>
-              {item.isDeleted && (
-                <Text style={styles.deletedLabel}>Moved to trash</Text>
-              )}
-            </View>
-          </View>
-          <Text style={[styles.cardText, item.isDeleted && { opacity: 0.5 }]} numberOfLines={2}>
-            {item.content}
-          </Text>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          {item.isDeleted ? (
-            <>
-              <TouchableOpacity 
-                style={[styles.actionBtn, styles.restoreBtn]}
-                onPress={() => handleRestoreEntry(item.entryId)}
-                disabled={restoringId === item.entryId}
-              >
-                {restoringId === item.entryId ? (
-                  <ActivityIndicator size="small" color="#22c55e" />
-                ) : (
-                  <MaterialIcons name="restore" size={20} color="#22c55e" />
-                )}
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity 
-                style={styles.actionBtn}
-                onPress={() => handleEditEntry(item.entryId)}
-              >
-                <MaterialIcons name="edit" size={20} color={COLORS.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.actionBtn}
-                onPress={() => handleDeleteEntry(item.entryId)}
-              >
-                <MaterialIcons name="delete" size={20} color="#EF4444" />
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </View>
-    </View>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, themeStyles.container]}>
@@ -374,8 +167,8 @@ const HistoryScreen = ({ onNavigate, params }) => {
                     <MaterialIcons name="arrow-back" size={24} color="#57534E" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Journal History</Text>
-                <TouchableOpacity style={styles.iconButton} onPress={() => onNavigate('Calendar', { diaryId })}>
-                    <MaterialIcons name="calendar-month" size={24} color="#57534E" />
+                <TouchableOpacity style={styles.iconButton} onPress={fetchData}>
+                    <MaterialIcons name="refresh" size={24} color="#57534E" />
                 </TouchableOpacity>
             </View>
 
@@ -385,112 +178,47 @@ const HistoryScreen = ({ onNavigate, params }) => {
                     <MaterialIcons name="search" size={24} color="#A8A29E" style={{ marginLeft: 12 }} />
                     <TextInput 
                         style={styles.searchInput}
-                        placeholder="Search reflections..."
+                        placeholder="Search entries..."
                         placeholderTextColor="#A8A29E"
-                        value={searchText}
-                        onChangeText={(text) => {
-                          setSearchText(text);
-                          setCurrentPage(1); // Reset to page 1 on search
-                        }}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
                     />
                 </View>
-                <TouchableOpacity style={styles.filterButton} onPress={loadEntries}>
-                    <MaterialIcons name="refresh" size={24} color="#57534E" />
-                </TouchableOpacity>
-            </View>
-
-            {/* Trash Toggle */}
-            <View style={styles.trashToggleContainer}>
-              <TouchableOpacity 
-                style={[styles.trashToggleBtn, showDeleted && styles.trashToggleBtnActive]}
-                onPress={() => {
-                  const newState = !showDeleted;
-                  setShowDeleted(newState);
-                  setCurrentPage(1); // Reset pagination
-                  console.log(`🗑️ Trash toggle: ${newState ? 'ON (showing deleted)' : 'OFF (showing active)'}`);
-                  // Reload entries with the new filter state
-                  loadEntries(diaryId, newState);
-                }}
-              >
-                <MaterialIcons 
-                  name={showDeleted ? "delete" : "delete-outline"} 
-                  size={18} 
-                  color={showDeleted ? "#EF4444" : "#A8A29E"}
-                />
-                <Text style={[styles.trashToggleText, showDeleted && styles.trashToggleTextActive]}>
-                  {showDeleted ? 'Trash' : 'View Trash'}
-                </Text>
-              </TouchableOpacity>
             </View>
         </View>
 
-        {/* Section List */}
-        {loading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          </View>
-        ) : allFilteredEntries.length === 0 ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 40 }}>
-            <MaterialIcons name="book" size={48} color={COLORS.textGray} />
-            <Text style={{ color: COLORS.textGray, marginTop: 16, fontSize: 16 }}>
-              {searchText ? 'No entries found' : 'No entries yet'}
-            </Text>
-          </View>
+        {/* List */}
+        {loading && !refreshing ? (
+           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+             <ActivityIndicator size="large" color={COLORS.primary} />
+           </View>
         ) : (
-          <ScrollView 
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Paginated Entries */}
-            {paginatedEntries.map(item => (
-              <View key={item.id}>
-                {renderEntry({ item })}
-              </View>
-            ))}
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <View style={styles.paginationContainer}>
-                <TouchableOpacity
-                  style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
-                  onPress={handlePreviousPage}
-                  disabled={currentPage === 1}
-                >
-                  <MaterialIcons name="chevron-left" size={20} color={currentPage === 1 ? '#D1D5DB' : COLORS.primary} />
-                  <Text style={[styles.paginationButtonText, currentPage === 1 && styles.paginationButtonTextDisabled]}>
-                    Previous
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.pageIndicator}>
-                  <Text style={styles.pageIndicatorText}>
-                    Page {currentPage} of {totalPages}
-                  </Text>
-                  <Text style={styles.pageCountText}>
-                    ({startIndex + 1}-{Math.min(startIndex + ENTRIES_PER_PAGE, allFilteredEntries.length)} of {allFilteredEntries.length})
-                  </Text>
+          <SectionList
+              sections={sections}
+              keyExtractor={(item) => item.id || item._id}
+              renderItem={renderEntry}
+              renderSectionHeader={({ section: { title } }) => (
+                  <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionHeaderText}>{title}</Text>
+                  </View>
+              )}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+              }
+              ListEmptyComponent={
+                <View style={{ alignItems: 'center', marginTop: 50 }}>
+                  <Text style={{ color: COLORS.textGray, fontFamily: 'Manrope_500Medium' }}>No entries found.</Text>
                 </View>
-
-                <TouchableOpacity
-                  style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
-                  onPress={handleNextPage}
-                  disabled={currentPage === totalPages}
-                >
-                  <Text style={[styles.paginationButtonText, currentPage === totalPages && styles.paginationButtonTextDisabled]}>
-                    Next
-                  </Text>
-                  <MaterialIcons name="chevron-right" size={20} color={currentPage === totalPages ? '#D1D5DB' : COLORS.primary} />
-                </TouchableOpacity>
-              </View>
-            )}
-          </ScrollView>
+              }
+          />
         )}
 
         {/* FAB */}
         <TouchableOpacity 
             style={styles.fab}
-            onPress={() => onNavigate('NewEntry', { diaryId, returnTo: 'History' })}
+            onPress={() => onNavigate('NewEntry')}
         >
             <MaterialIcons name="add" size={32} color="#112111" />
         </TouchableOpacity>
@@ -499,19 +227,19 @@ const HistoryScreen = ({ onNavigate, params }) => {
         <View style={[styles.bottomNav, themeStyles.navBg]}>
              <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Home')}>
                   <MaterialIcons name="home" size={28} color="#A8A29E" />
-                  <Text style={styles.navLabel}>Home</Text>
+                  <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Home</Text>
              </TouchableOpacity>
              <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History')}>
                   <MaterialIcons name="menu-book" size={28} color={COLORS.primary} />
                   <Text style={[styles.navLabel, { color: COLORS.primary }]}>Diary</Text>
              </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar', { diaryId })}>
+             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar')}>
                   <MaterialIcons name="calendar-today" size={28} color="#A8A29E" />
-                  <Text style={styles.navLabel}>Calendar</Text>
+                  <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Calendar</Text>
              </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics', { diaryId })}>
+             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics')}>
                   <MaterialIcons name="analytics" size={28} color="#A8A29E" />
-                  <Text style={styles.navLabel}>Insights</Text>
+                  <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Insights</Text>
              </TouchableOpacity>
         </View>
 
@@ -527,7 +255,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 16,
     backgroundColor: 'rgba(253, 251, 247, 0.95)',
   },
   headerTop: {
@@ -540,7 +268,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F5F5F4', // Stone-100
+    backgroundColor: '#F5F5F4',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -570,92 +298,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_400Regular',
     color: '#1C1917',
   },
-  filterButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#F5F5F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trashToggleContainer: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E7E5E4',
-  },
-  trashToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F4',
-  },
-  trashToggleBtnActive: {
-    backgroundColor: '#FEE2E2', // Red-100
-    borderWidth: 1,
-    borderColor: '#FCA5A5', // Red-300
-  },
-  trashToggleText: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: '#A8A29E',
-  },
-  trashToggleTextActive: {
-    color: '#EF4444',
-  },
-  filterScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
-    alignItems: 'center',
-  },
-  chip: {
-    height: 36,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    backgroundColor: '#F5F5F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipActive: {
-    height: 36,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    backgroundColor: 'rgba(25, 230, 25, 0.2)', // Primary/20
-    borderWidth: 1,
-    borderColor: 'rgba(25, 230, 25, 0.3)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'Manrope_500Medium',
-    color: '#1C1917',
-  },
-  chipTextActive: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: '#1C1917',
-  },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100, // Space for Bottom Nav + FAB
+    paddingBottom: 100,
   },
   sectionHeader: {
     paddingVertical: 16,
     paddingTop: 8,
-    backgroundColor: COLORS.backgroundLight, // Sticky header bg
+    backgroundColor: COLORS.backgroundLight,
   },
   sectionHeaderText: {
     fontSize: 12,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#78716C', // Stone-500
+    color: '#78716C',
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
@@ -671,11 +327,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
-  },
-  cardDeleted: {
-    backgroundColor: '#FFFBFA',
-    borderColor: '#FCA5A5',
-    opacity: 0.85,
   },
   cardImage: {
     width: '100%',
@@ -704,38 +355,27 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   cardDay: {
-    fontSize: 18,
+    fontSize: 14, // Reduced from 18 to fit better
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
     color: '#1C1917',
-  },
-  textDeleted: {
-    textDecorationLine: 'line-through',
-    color: '#A8A29E',
-  },
-  deletedLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: '#EF4444',
-    marginTop: 4,
-  },
-  cardDayLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    fontFamily: 'Manrope_500Medium',
-    color: '#A8A29E', // Stone-400
   },
   cardTime: {
     fontSize: 12,
     fontWeight: '500',
     fontFamily: 'Manrope_500Medium',
-    color: '#A8A29E', // Stone-400
+    color: '#A8A29E',
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    marginBottom: 4,
   },
   cardText: {
     fontSize: 14,
     fontFamily: 'Manrope_400Regular',
-    color: '#78716C', // Stone-500
+    color: '#78716C',
     lineHeight: 22,
     marginBottom: 12,
   },
@@ -754,30 +394,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#57534E', // Stone-600
+    color: '#57534E',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  actionButtons: {
-    flexDirection: 'column',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  actionBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  restoreBtn: {
-    backgroundColor: '#DCFCE7', // Green-100
-    borderWidth: 1,
-    borderColor: '#86EFAC', // Green-300
-  },
   fab: {
     position: 'absolute',
-    bottom: 90, // Above bottom nav
+    bottom: 90,
     right: 24,
     width: 64,
     height: 64,
@@ -815,59 +438,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
     color: '#A8A29E',
-  },
-  paginationContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E7E5E4',
-  },
-  paginationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F4',
-    flex: 1,
-    justifyContent: 'center',
-  },
-  paginationButtonDisabled: {
-    opacity: 0.5,
-  },
-  paginationButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: COLORS.primary,
-  },
-  paginationButtonTextDisabled: {
-    color: '#D1D5DB',
-  },
-  pageIndicator: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  pageIndicatorText: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: '#111811',
-  },
-  pageCountText: {
-    fontSize: 12,
-    fontFamily: 'Manrope_400Regular',
-    color: '#A8A29E',
-    marginTop: 2,
   },
 });
 

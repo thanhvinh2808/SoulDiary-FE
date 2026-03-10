@@ -29,6 +29,7 @@ import HomeScreen from './src/HomeScreen';
 import OnboardingScreen from './src/OnboardingScreen';
 import ProfileScreen from './src/ProfileScreen';
 import EditProfileScreen from './src/EditProfileScreen';
+import ForgotPasswordScreen from './src/ForgotPasswordScreen';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -119,7 +120,9 @@ function AppContent() {
       case 'Onboarding':
         return <OnboardingScreen onGetStarted={() => navigateTo('Auth')} />;
       case 'Auth':
-        return <AuthScreen onLoginSuccess={handleLoginSuccess} {...params} />;
+        return <AuthScreen onLoginSuccess={handleLoginSuccess} onForgotPassword={() => navigateTo('ForgotPassword')} {...params} />;
+      case 'ForgotPassword':
+        return <ForgotPasswordScreen onBack={() => navigateTo('Auth')} onLogin={() => navigateTo('Auth')} />;
       case 'Home':
         return <HomeScreen onNavigate={navigateTo} {...params} />;
       case 'NewEntry':

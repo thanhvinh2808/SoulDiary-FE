@@ -1,64 +1,99 @@
 import { API_URL } from '../config';
 import { authService } from './authService';
 
+// Biến cờ để tránh gọi refresh token nhiều lần cùng lúc
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 /**
- * Hàm fetch wrapper để tự động thêm Authorization header
+ * Hàm fetch wrapper để tự động thêm Authorization header và xử lý Refresh Token
  */
 export const api = async (endpoint, options = {}) => {
-  const token = await authService.getToken();
-  console.log(`📡 API Call [${endpoint}] - Token available:`, !!token);
+  let token = await authService.getToken();
   
-  const headers = {
+  const getHeaders = (t) => ({
     'Content-Type': 'application/json',
     ...options.headers,
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-    console.log('✅ Authorization header added');
-  } else {
-    console.warn('⚠️ No token available for Authorization header');
-  }
+    ...(t ? { 'Authorization': `Bearer ${t}` } : {})
+  });
 
   const config = {
     ...options,
-    headers,
+    headers: getHeaders(token),
   };
 
   try {
     const response = await fetch(`${API_URL}${endpoint}`, config);
     
-    // Xử lý 401 Unauthorized (Token hết hạn) - Tùy chọn: có thể logout tại đây
+    // Xử lý 401 Unauthorized (Token hết hạn)
     if (response.status === 401) {
-      console.warn('Unauthorized access - Token might be invalid');
-      // await authService.logout(); // Cân nhắc tự động logout
+      console.warn('⚠️ Unauthorized access - Attempting to refresh token...');
+      
+      if (isRefreshing) {
+        // Nếu đang refresh, đợi và retry request sau khi refresh xong
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(newToken => {
+          // Retry request với token mới
+          return api(endpoint, {
+            ...options,
+            headers: getHeaders(newToken)
+          });
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
+      isRefreshing = true;
+
+      try {
+        // Gọi refresh token
+        const newToken = await authService.refreshToken();
+        isRefreshing = false;
+        
+        // Xử lý hàng đợi các request bị pending
+        processQueue(null, newToken);
+
+        // Retry request hiện tại
+        return api(endpoint, {
+          ...options,
+          headers: getHeaders(newToken)
+        });
+
+      } catch (refreshError) {
+        isRefreshing = false;
+        processQueue(refreshError, null);
+        // Nếu refresh fail, logout đã được xử lý bên trong authService
+        throw refreshError;
+      }
     }
 
-    // Get response text first
-    const text = await response.text();
-    console.log(`📥 Raw response [${endpoint}]:`, text.substring(0, 200));
-    
-    // Handle non-JSON responses (error pages, etc)
-    if (!text || text.includes('Could not be found') || text.includes('NOT_FOUND')) {
-      console.error(`❌ Server returned error page for [${endpoint}]`);
-      throw new Error(`Endpoint not found or resource doesn't exist: ${endpoint}`);
-    }
-    
-    // Try to parse as JSON
-    let data;
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch (parseError) {
-      console.error(`❌ JSON Parse Error [${endpoint}]:`, parseError.message);
-      console.log('📄 Response content:', text.substring(0, 500));
-      throw new Error(`Invalid response from server: ${text.substring(0, 100)}`);
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+       const data = await response.json();
+       if (!response.ok) {
+          throw new Error(data.message || `Error ${response.status}`);
+       }
+       return data;
+    } else {
+       // Nếu không phải JSON, đọc text để debug
+       const text = await response.text();
+       console.error(`❌ API Error [${endpoint}] - Status: ${response.status}`);
+       console.error(`❌ Raw Response: ${text.substring(0, 200)}`); // Log 200 ký tự đầu
+       throw new Error(`Server returned non-JSON response (${response.status})`);
     }
 
-    if (!response.ok) {
-      throw new Error(data.message || data.error || `Error ${response.status}`);
-    }
-
-    return data;
   } catch (error) {
     console.error(`API Request Error [${endpoint}]:`, error);
     throw error;

@@ -48,40 +48,49 @@ const fetchWithRetry = async (url, options = {}, retries = MAX_RETRIES) => {
 export const authService = {
   async getToken() {
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      console.log('🔑 Retrieved token from storage:', token ? `${token.substring(0, 20)}...` : 'null');
-      return token;
+      return await AsyncStorage.getItem('userToken');
     } catch (e) {
       console.error('❌ Failed to load token:', e);
       return null;
     }
   },
 
-  async saveToken(token) {
+  async getRefreshToken() {
     try {
-      console.log('💾 Saving token to storage:', token ? `${token.substring(0, 20)}...` : 'null');
-      await AsyncStorage.setItem('userToken', token);
-      console.log('✅ Token saved successfully');
+      return await AsyncStorage.getItem('refreshToken');
     } catch (e) {
-      console.error('❌ Failed to save token:', e);
+      console.error('❌ Failed to load refresh token:', e);
+      return null;
     }
   },
 
-  async removeToken() {
+  async saveTokens(accessToken, refreshToken) {
     try {
-      await AsyncStorage.removeItem('userToken');
-      console.log('✅ Token removed successfully');
+      await AsyncStorage.setItem('userToken', accessToken);
+      if (refreshToken) {
+        await AsyncStorage.setItem('refreshToken', refreshToken);
+      }
+      console.log('✅ Tokens saved successfully');
     } catch (e) {
-      console.error('❌ Failed to remove token:', e);
+      console.error('❌ Failed to save tokens:', e);
+    }
+  },
+
+  async removeTokens() {
+    try {
+      await AsyncStorage.multiRemove(['userToken', 'refreshToken']);
+      console.log('✅ Tokens removed successfully');
+    } catch (e) {
+      console.error('❌ Failed to remove tokens:', e);
     }
   },
   
   async login(email, password) {
     try {
       console.log('🔐 Attempting login for:', email);
-      console.log('📍 API URL:', `${API_URL}/auth?action=login`);
+      console.log('📍 API URL:', `${API_URL}/auth/login`);
       
-      const response = await fetchWithRetry(`${API_URL}/auth?action=login`, {
+      const response = await fetchWithRetry(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -89,54 +98,10 @@ export const authService = {
         body: JSON.stringify({ email, password }),
       });
 
-      // Kiểm tra response có tồn tại không
-      if (!response) {
-        throw new Error('No response from server. Please check your connection.');
-      }
+      const data = await this._handleResponse(response);
 
-      console.log('📥 Response status:', response.status);
-      
-      // Kiểm tra content type trước khi parse JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Server error: Please check if the backend is running correctly');
-      }
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || `Login failed (${response.status})`);
-      }
-
-      // Log full response for debugging
-      console.log('📥 Full response:', JSON.stringify(data).substring(0, 500));
-
-      // Lưu token nếu có
-      if (data.token) {
-        // Backend trả về { access_token, refresh_token }
-        // Chúng ta cần access_token để gọi API
-        console.log('📦 Token response format:', typeof data.token, JSON.stringify(data.token).substring(0, 100));
-        const accessToken = data.token.access_token || data.token;
-        console.log('🔐 Extracted access token:', typeof accessToken, accessToken ? `${accessToken.substring(0, 20)}...` : 'null');
-        if (typeof accessToken === 'string') {
-           await this.saveToken(accessToken);
-           console.log('✅ Login successful, token saved');
-        } else {
-           console.warn('⚠️ Token is not a string:', accessToken);
-        }
-      } else if (data.data && data.data.token) {
-        // Token might be nested in data.data
-        console.log('🔍 Token found in data.data');
-        const accessToken = data.data.token.access_token || data.data.token;
-        if (typeof accessToken === 'string') {
-           await this.saveToken(accessToken);
-           console.log('✅ Login successful, token saved from data.data');
-        }
-      } else {
-        console.warn('⚠️ No token found. Response keys:', Object.keys(data), data.data ? Object.keys(data.data) : 'no data');
-      }
+      // Xử lý lưu token (Backend có thể trả về cấu trúc khác nhau)
+      await this._handleAuthResponse(data);
 
       return data;
     } catch (error) {
@@ -148,9 +113,9 @@ export const authService = {
   async register(name, email, password) {
     try {
       console.log('📝 Attempting registration for:', email);
-      console.log('📍 API URL:', `${API_URL}/auth?action=register`);
+      console.log('📍 API URL:', `${API_URL}/auth/register`);
       
-      const response = await fetchWithRetry(`${API_URL}/auth?action=register`, {
+      const response = await fetchWithRetry(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -158,26 +123,10 @@ export const authService = {
         body: JSON.stringify({ name, email, password }),
       });
 
-      // Kiểm tra response có tồn tại không
-      if (!response) {
-        throw new Error('No response from server. Please check your connection.');
-      }
-
-      console.log('📥 Response status:', response.status);
+      const data = await this._handleResponse(response);
       
-      // Kiểm tra content type trước khi parse JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Server error: Please check if the backend is running correctly');
-      }
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || `Registration failed (${response.status})`);
-      }
+      // Đăng ký xong thường tự động login hoặc trả về token
+      await this._handleAuthResponse(data);
 
       console.log('✅ Registration successful');
       return data;
@@ -190,46 +139,41 @@ export const authService = {
   async loginGoogle(token) {
     try {
       console.log('🔵 Google Login - Sending token to server');
-      console.log('📍 API URL:', `${API_URL}/auth/google`);
-      console.log('🔑 Token preview:', token.substring(0, 20) + '...');
       
       const response = await fetchWithRetry(`${API_URL}/auth/google`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ idToken: token }),
+        body: JSON.stringify({ 
+          idToken: token,
+          accessToken: token, // Fallback
+          token: token        // Fallback
+        }),
       });
 
-      // Kiểm tra response có tồn tại không
       if (!response) {
-        throw new Error('No response from server. Please check your connection.');
+         throw new Error('No response received from server');
       }
 
-      console.log('📥 Response status:', response.status);
-      
-      // Kiểm tra content type trước khi parse JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Server error: Please check if the backend is running correctly');
+      console.log('📥 Google Login Response Status:', response.status);
+
+      // Đọc response dưới dạng text trước để debug nếu lỗi
+      const textResponse = await response.text();
+      console.log('📥 Google Login Raw Response:', textResponse.substring(0, 500)); // Log 500 ký tự đầu
+
+      let data;
+      try {
+        data = JSON.parse(textResponse);
+      } catch (e) {
+        throw new Error(`Server returned non-JSON response: ${textResponse.substring(0, 100)}`);
       }
 
-      const data = await response.json();
-      
       if (!response.ok) {
-        console.error('❌ Google Server Error:', data);
         throw new Error(data.message || `Google login failed (${response.status})`);
       }
-
-      if (data.token) {
-        const accessToken = data.token.access_token || data.token;
-        if (typeof accessToken === 'string') {
-          await this.saveToken(accessToken);
-          console.log('✅ Google Login successful, token saved');
-        }
-      }
+      
+      await this._handleAuthResponse(data);
 
       return data;
     } catch (error) {
@@ -241,46 +185,20 @@ export const authService = {
   async loginFacebook(accessToken) {
     try {
       console.log('🔵 Facebook Login - Sending token to server');
-      console.log('📍 API URL:', `${API_URL}/auth/facebook`);
-      console.log('🔑 Token preview:', accessToken.substring(0, 20) + '...');
       
       const response = await fetchWithRetry(`${API_URL}/auth/facebook`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ accessToken }),
+        body: JSON.stringify({ 
+          accessToken: accessToken,
+          token: accessToken
+        }),
       });
 
-      // Kiểm tra response có tồn tại không
-      if (!response) {
-        throw new Error('No response from server. Please check your connection.');
-      }
-
-      console.log('📥 Response status:', response.status);
-      
-      // Kiểm tra content type trước khi parse JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Server error: Please check if the backend is running correctly');
-      }
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        console.error('❌ Facebook Server Error:', data);
-        throw new Error(data.message || `Facebook login failed (${response.status})`);
-      }
-
-      if (data.token) {
-        const accessToken = data.token.access_token || data.token;
-        if (typeof accessToken === 'string') {
-          await this.saveToken(accessToken);
-          console.log('✅ Facebook Login successful, token saved');
-        }
-      }
+      const data = await this._handleResponse(response);
+      await this._handleAuthResponse(data);
 
       return data;
     } catch (error) {
@@ -289,10 +207,65 @@ export const authService = {
     }
   },
 
+  async refreshToken() {
+    try {
+      const refreshToken = await this.getRefreshToken();
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      console.log('🔄 Refreshing Access Token...');
+      
+      // Gọi API refresh token
+      // Lưu ý: Backend dùng POST /auth/refresh-token
+      const response = await fetch(`${API_URL}/auth/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        // Nếu refresh thất bại (hết hạn), cần logout
+        throw new Error('Refresh token invalid or expired');
+      }
+
+      const data = await response.json();
+      
+      // Backend trả về bộ token mới
+      await this._handleAuthResponse(data);
+      
+      // Trả về access token mới để API retry request
+      return data.access_token || data.token?.access_token || data.token;
+
+    } catch (error) {
+      console.error('❌ Refresh Token Error:', error.message);
+      await this.logout(); // Logout nếu không refresh được
+      throw error;
+    }
+  },
+
   async logout() {
     try {
-      await this.removeToken();
-      console.log('✅ Logged out successfully');
+      // 1. Gọi API Logout (Best effort - không throw lỗi nếu mạng lỗi)
+      const refreshToken = await this.getRefreshToken();
+      if (refreshToken) {
+        try {
+          await fetch(`${API_URL}/auth/logout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+          console.log('✅ Server logout called');
+        } catch (serverError) {
+          console.warn('⚠️ Server logout failed, proceeding with local logout:', serverError.message);
+        }
+      }
+
+      // 2. Xóa token local
+      await this.removeTokens();
+      console.log('✅ Local logout successful');
     } catch (error) {
       console.error('❌ Logout Error:', error);
     }
@@ -305,7 +278,7 @@ export const authService = {
         throw new Error('No token found. Please login first.');
       }
 
-      const response = await fetchWithRetry(`${API_URL}/users`, {
+      const response = await fetchWithRetry(`${API_URL}/users/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -328,25 +301,13 @@ export const authService = {
       }
 
       console.log('✅ User profile fetched successfully');
-      console.log('📋 Full response data:', JSON.stringify(data).substring(0, 500));
-      
       // Backend returns { status, data: { user: {...} } }
       const user = data.data?.user || data.user;
-      console.log('👤 Extracted user object:', JSON.stringify(user).substring(0, 300));
-      
-      // Load cached profile fields from AsyncStorage
-      const cachedProfile = await AsyncStorage.getItem('cachedProfileFields');
-      const profileFields = cachedProfile ? JSON.parse(cachedProfile) : {};
-      console.log('💾 Loaded cached profile fields:', profileFields);
-      
-      const result = {
+      return {
         ...user,
-        ...profileFields,  // Overlay cached fields (bio, phone)
         // Map 'photo' to 'profileImage' for frontend consistency
         profileImage: user?.photo || user?.profileImage,
       };
-      console.log('📱 Final user object for frontend:', JSON.stringify(result).substring(0, 300));
-      return result;
     } catch (error) {
       console.error('❌ Get Current User Error:', error.message);
       throw error;
@@ -377,8 +338,8 @@ export const authService = {
 
       console.log('📝 Updating profile with:', mappedData);
 
-      const response = await fetchWithRetry(`${API_URL}/users`, {
-        method: 'PUT',
+      const response = await fetchWithRetry(`${API_URL}/users/me`, {
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -402,19 +363,8 @@ export const authService = {
 
       console.log('✅ Profile updated successfully');
       const user = data.data?.user || data.user;
-      
-      // Cache bio and phone fields locally since backend doesn't return them in GET response
-      const profileFields = {};
-      if (updateData.bio) profileFields.bio = updateData.bio;
-      if (updateData.phone) profileFields.phone = updateData.phone;
-      if (Object.keys(profileFields).length > 0) {
-        await AsyncStorage.setItem('cachedProfileFields', JSON.stringify(profileFields));
-        console.log('💾 Cached profile fields:', profileFields);
-      }
-      
       return {
         ...user,
-        ...profileFields,  // Include the fields we just saved
         profileImage: user?.photo || user?.profileImage,
       };
     } catch (error) {
@@ -423,163 +373,88 @@ export const authService = {
     }
   },
 
-  // OTP Verification
-  async verifyOtp(email, otp) {
-    try {
-      console.log('🔐 Verifying OTP for:', email);
-      console.log('📍 API URL:', `${API_URL}/otp?action=verify`);
-      
-      const response = await fetchWithRetry(`${API_URL}/otp?action=verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, otp }),
-      });
+  // --- OTP & PASSWORD RECOVERY ---
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Server error: Invalid response format');
-      }
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || `OTP verification failed (${response.status})`);
-      }
-
-      console.log('✅ OTP verified successfully');
-      return data;
-    } catch (error) {
-      console.error('❌ OTP Verification Error:', error.message);
-      throw error;
-    }
-  },
-
-  // Resend OTP
-  async resendOtp(email) {
+  // Gửi lại mã OTP
+  async resendOtp(email, type = 'forgotPassword') {
     try {
       console.log('📧 Resending OTP to:', email);
-      console.log('📍 API URL:', `${API_URL}/otp?action=resend`);
-      
-      const response = await fetchWithRetry(`${API_URL}/otp?action=resend`, {
+      const response = await fetch(`${API_URL}/otp/resend`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, type }),
       });
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Server error: Invalid response format');
-      }
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || `Resend OTP failed (${response.status})`);
-      }
-
-      console.log('✅ OTP resent successfully');
-      return data;
+      return await this._handleResponse(response);
     } catch (error) {
       console.error('❌ Resend OTP Error:', error.message);
       throw error;
     }
   },
 
-  // Forgot Password - Request OTP
-  async forgotPassword(email) {
+  // Xác thực mã OTP
+  async verifyOtp(email, code, type = 'forgotPassword') {
     try {
-      console.log('🔐 Requesting password reset OTP for:', email);
-      console.log('📍 API URL:', `${API_URL}/auth?action=forgot-password`);
-      
-      const response = await fetchWithRetry(`${API_URL}/auth?action=forgot-password`, {
+      console.log('🔐 Verifying OTP for:', email);
+      const response = await fetch(`${API_URL}/otp/verify`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code, type }),
       });
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Server error: Invalid response format');
-      }
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || `Password reset request failed (${response.status})`);
-      }
-
-      console.log('✅ OTP sent to email');
-      return data;
+      return await this._handleResponse(response);
     } catch (error) {
-      console.error('❌ Forgot Password Error:', error.message);
+      console.error('❌ Verify OTP Error:', error.message);
       throw error;
     }
   },
 
-  // Reset Password after OTP verification
-  async resetPassword(newPassword, confirmPassword, temporaryToken = null) {
-    try {
-      let token = temporaryToken;
-      
-      // If no temporary token provided, try to get from storage (for regular password change)
-      if (!token) {
-        token = await this.getToken();
-      }
-      
-      if (!token) {
-        throw new Error('No token found. Please verify your email first.');
-      }
+  // Helper: Xử lý response chung
+  async _handleResponse(response) {
+    // Kiểm tra connection/response
+    if (!response) {
+      throw new Error('No response from server. Please check your connection.');
+    }
 
-      console.log('🔐 Resetting password');
-      console.log('📍 API URL:', `${API_URL}/users/updateMyPassword`);
-      
-      // When using temporary token (from OTP), this is a password reset, not a regular change
-      const isPasswordReset = !!temporaryToken;
-      console.log(`🔑 Password reset flow: ${isPasswordReset}`);
-      
-      const response = await fetchWithRetry(`${API_URL}/users/updateMyPassword`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          newPassword, 
-          confirmPassword,
-          isReset: isPasswordReset  // Flag to skip current password verification
-        }),
-      });
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
+      throw new Error('Server error: Backend returned invalid format');
+    }
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('❌ Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Server error: Invalid response format');
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || `Request failed (${response.status})`);
+    }
+    return data;
+  },
+
+  // Helper: Lưu token từ response login/register
+  async _handleAuthResponse(data) {
+    // Cấu trúc response có thể là:
+    // 1. { token: "access_token_string" } (Legacy)
+    // 2. { token: { access_token: "...", refresh_token: "..." } } (Standard)
+    // 3. { access_token: "...", refresh_token: "..." } (Flat)
+    
+    let accessToken = null;
+    let refreshToken = null;
+
+    if (data.token) {
+      if (typeof data.token === 'string') {
+        accessToken = data.token;
+      } else {
+        accessToken = data.token.access_token;
+        refreshToken = data.token.refresh_token;
       }
+    } else {
+      accessToken = data.access_token;
+      refreshToken = data.refresh_token;
+    }
 
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || `Password reset failed (${response.status})`);
-      }
-
-      console.log('✅ Password reset successfully');
-      return data;
-    } catch (error) {
-      console.error('❌ Reset Password Error:', error.message);
-      throw error;
+    if (accessToken) {
+      await this.saveTokens(accessToken, refreshToken);
+      console.log('✅ Tokens extracted and saved');
+    } else {
+      console.warn('⚠️ No access token found in response:', data);
     }
   },
 
