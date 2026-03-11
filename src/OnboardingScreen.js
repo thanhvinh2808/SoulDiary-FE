@@ -12,27 +12,28 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
+import { useTheme } from './context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
 const OnboardingScreen = ({ onGetStarted }) => {
-  // FORCE LIGHT MODE
-  const isDark = false;
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets(); 
 
   const themeStyles = {
     container: {
-      backgroundColor: COLORS.backgroundLight,
+      backgroundColor: themeColors.background,
     },
     textPrimary: {
-      color: COLORS.textMain,
+      color: themeColors.text,
     },
     textSecondary: {
-      color: 'rgba(45, 52, 45, 0.7)',
+      color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(45, 52, 45, 0.7)',
     },
     skipText: {
-      color: 'rgba(45, 52, 45, 0.6)',
+      color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(45, 52, 45, 0.6)',
     },
   };
 
@@ -40,7 +41,7 @@ const OnboardingScreen = ({ onGetStarted }) => {
 
   return (
     <SafeAreaView style={[styles.container, themeStyles.container, { paddingTop: 0 }]} edges={['left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       
       {/* Top Navigation Bar */}
       <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>

@@ -13,10 +13,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { diaryService } from './services/diaryService';
+import { useTheme } from './context/ThemeContext';
 
 const ExportScreen = ({ onClose }) => {
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   const [diaries, setDiaries] = useState([]);
   const [entries, setEntries] = useState([]);
@@ -185,27 +188,27 @@ const ExportScreen = ({ onClose }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'top']}>
         
         {/* Header */}
-        <View style={[styles.header, { paddingLeft: insets.left, paddingRight: insets.right }]}>
+        <View style={[styles.header, { paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-            <MaterialIcons name="arrow-back" size={28} color="#111811" />
+            <MaterialIcons name="arrow-back" size={28} color={themeColors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Export & Backup</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Export & Backup</Text>
           <View style={{ width: 28 }} />
         </View>
 
         {/* Content */}
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={[styles.content, { backgroundColor: themeColors.background }]} showsVerticalScrollIndicator={false}>
           
           {/* Info Card */}
-          <View style={styles.infoCard}>
+          <View style={[styles.infoCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
             <MaterialIcons name="cloud-download" size={32} color={COLORS.primary} />
-            <Text style={styles.infoTitle}>Export Your Entries</Text>
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoTitle, { color: themeColors.text }]}>Export Your Entries</Text>
+            <Text style={[styles.infoText, { color: themeColors.textSecondary }]}>
               Select and export individual journal entries as files to keep backups or share specific memories.
             </Text>
           </View>
@@ -214,7 +217,7 @@ const ExportScreen = ({ onClose }) => {
           {selectedDiaryId && (
             <View style={styles.section}>
               <View style={styles.entriesHeader}>
-                <Text style={styles.sectionTitle}>Select Entries ({selectedEntries.length}/{filteredEntries.length})</Text>
+                <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Select Entries ({selectedEntries.length}/{filteredEntries.length})</Text>
                 <TouchableOpacity 
                   style={styles.selectAllButton}
                   onPress={selectAllEntries}
@@ -307,7 +310,7 @@ const ExportScreen = ({ onClose }) => {
                         onPress={handlePreviousPage}
                         disabled={currentPage === 1}
                       >
-                        <MaterialIcons name="chevron-left" size={20} color={currentPage === 1 ? '#D1D5DB' : COLORS.primary} />
+                        <MaterialIcons name="chevron-left" size={20} color={currentPage === 1 ? themeColors.textMuted : COLORS.primary} />
                         <Text style={[styles.paginationButtonText, currentPage === 1 && styles.paginationButtonTextDisabled]}>
                           Previous
                         </Text>
@@ -330,7 +333,7 @@ const ExportScreen = ({ onClose }) => {
                         <Text style={[styles.paginationButtonText, currentPage === totalPages && styles.paginationButtonTextDisabled]}>
                           Next
                         </Text>
-                        <MaterialIcons name="chevron-right" size={20} color={currentPage === totalPages ? '#D1D5DB' : COLORS.primary} />
+                        <MaterialIcons name="chevron-right" size={20} color={currentPage === totalPages ? themeColors.textMuted : COLORS.primary} />
                       </TouchableOpacity>
                     </View>
                   )}

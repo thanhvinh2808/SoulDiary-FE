@@ -13,16 +13,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { authService } from './services/authService';
+import { useTheme } from './context/ThemeContext';
 import { api } from './services/api';
 
 const ChangePasswordScreen = ({ onNavigate, onClose }) => {
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
+  const [loading, setLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -123,19 +126,19 @@ const ChangePasswordScreen = ({ onNavigate, onClose }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'top']}>
         
         {/* Header */}
-        <View style={[styles.header, { paddingLeft: insets.left, paddingRight: insets.right }]}>
+        <View style={[styles.header, { paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
           <TouchableOpacity 
             onPress={() => onClose ? onClose() : onNavigate('Profile')}
             hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
           >
-            <MaterialIcons name="arrow-back" size={28} color="#111811" />
+            <MaterialIcons name="arrow-back" size={28} color={themeColors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Change Password</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Change Password</Text>
           <View style={{ width: 28 }} />
         </View>
 
@@ -145,8 +148,8 @@ const ChangePasswordScreen = ({ onNavigate, onClose }) => {
           {/* Info Section */}
           <View style={styles.infoSection}>
             <MaterialIcons name="lock" size={48} color={COLORS.primary} />
-            <Text style={styles.infoTitle}>Update Your Password</Text>
-            <Text style={styles.infoDesc}>
+            <Text style={[styles.infoTitle, { color: themeColors.text }]}>Update Your Password</Text>
+            <Text style={[styles.infoDesc, { color: themeColors.textMuted }]}>
               {currentPassword.trim() 
                 ? 'To keep your account secure, please verify your current password and choose a new one.'
                 : 'Please choose a strong new password to secure your account.'}
@@ -158,15 +161,15 @@ const ChangePasswordScreen = ({ onNavigate, onClose }) => {
             
             {/* Current Password */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>
+              <Text style={[styles.label, { color: themeColors.text }]}>
                 Current Password
-                {!currentPassword.trim() && <Text style={{ color: '#9CA3AF', fontSize: 12 }}> (optional)</Text>}
+                {!currentPassword.trim() && <Text style={{ color: themeColors.textMuted, fontSize: 12 }}> (optional)</Text>}
               </Text>
-              <View style={styles.passwordInputContainer}>
+              <View style={[styles.passwordInputContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: themeColors.text }]}
                   placeholder={currentPassword.trim() ? "Enter your current password" : "Skip if you don't have one yet"}
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={themeColors.textMuted}
                   secureTextEntry={!showCurrentPassword}
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
@@ -187,12 +190,12 @@ const ChangePasswordScreen = ({ onNavigate, onClose }) => {
 
             {/* New Password */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>New Password</Text>
-              <View style={styles.passwordInputContainer}>
+              <Text style={[styles.label, { color: themeColors.text }]}>New Password</Text>
+              <View style={[styles.passwordInputContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: themeColors.text }]}
                   placeholder="Enter a new password (min. 8 characters)"
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={themeColors.textMuted}
                   secureTextEntry={!showNewPassword}
                   value={newPassword}
                   onChangeText={setNewPassword}
@@ -209,19 +212,19 @@ const ChangePasswordScreen = ({ onNavigate, onClose }) => {
                   />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: themeColors.textMuted }]}>
                 • At least 8 characters long
               </Text>
             </View>
 
             {/* Confirm Password */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Confirm New Password</Text>
-              <View style={styles.passwordInputContainer}>
+              <Text style={[styles.label, { color: themeColors.text }]}>Confirm New Password</Text>
+              <View style={[styles.passwordInputContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: themeColors.text }]}
                   placeholder="Confirm your new password"
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={themeColors.textMuted}
                   secureTextEntry={!showConfirmPassword}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
@@ -241,13 +244,13 @@ const ChangePasswordScreen = ({ onNavigate, onClose }) => {
             </View>
 
             {/* Password Requirements */}
-            <View style={styles.requirementsBox}>
-              <Text style={styles.requirementsTitle}>Password Requirements:</Text>
-              <Text style={styles.requirementItem}>✓ At least 8 characters long</Text>
+            <View style={[styles.requirementsBox, { backgroundColor: themeColors.text === '#FFFFFF' ? 'rgba(25, 230, 25, 0.1)' : 'rgba(25, 230, 25, 0.08)' }]}>
+              <Text style={[styles.requirementsTitle, { color: themeColors.text }]}>Password Requirements:</Text>
+              <Text style={[styles.requirementItem, { color: themeColors.textMuted }]}>✓ At least 8 characters long</Text>
               {currentPassword.trim() && (
-                <Text style={styles.requirementItem}>✓ Different from your current password</Text>
+                <Text style={[styles.requirementItem, { color: themeColors.textMuted }]}>✓ Different from your current password</Text>
               )}
-              <Text style={styles.requirementItem}>✓ Passwords must match</Text>
+              <Text style={[styles.requirementItem, { color: themeColors.textMuted }]}>✓ Passwords must match</Text>
             </View>
 
             {/* Change Password Button */}
@@ -268,11 +271,11 @@ const ChangePasswordScreen = ({ onNavigate, onClose }) => {
 
             {/* Cancel Button */}
             <TouchableOpacity
-              style={styles.cancelButton}
+              style={[styles.cancelButton, { borderColor: themeColors.border, backgroundColor: themeColors.surface }]}
               onPress={() => onClose ? onClose() : onNavigate('Profile')}
               disabled={loading}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={[styles.cancelButtonText, { color: themeColors.text }]}>Cancel</Text>
             </TouchableOpacity>
 
           </View>
@@ -288,7 +291,6 @@ const ChangePasswordScreen = ({ onNavigate, onClose }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FDFBF7',
   },
   header: {
     flexDirection: 'row',
@@ -297,13 +299,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#111811',
   },
   content: {
     flex: 1,
@@ -318,7 +318,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#111811',
     marginTop: 16,
     marginBottom: 12,
     textAlign: 'center',
@@ -326,7 +325,6 @@ const styles = StyleSheet.create({
   infoDesc: {
     fontSize: 14,
     fontFamily: 'Manrope_400Regular',
-    color: '#A8A29E',
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -340,15 +338,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     fontFamily: 'Manrope_600SemiBold',
-    color: '#111811',
     marginBottom: 8,
   },
   passwordInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#E5E5E5',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -358,17 +353,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontFamily: 'Manrope_400Regular',
-    color: '#111811',
     paddingVertical: 0,
   },
   hint: {
     fontSize: 12,
     fontFamily: 'Manrope_400Regular',
-    color: '#A8A29E',
     marginTop: 6,
   },
   requirementsBox: {
-    backgroundColor: 'rgba(25, 230, 25, 0.08)',
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
@@ -379,13 +371,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     fontFamily: 'Manrope_600SemiBold',
-    color: '#111811',
     marginBottom: 8,
   },
   requirementItem: {
     fontSize: 12,
     fontFamily: 'Manrope_400Regular',
-    color: '#A8A29E',
     lineHeight: 18,
   },
   changeButton: {
@@ -411,12 +401,10 @@ const styles = StyleSheet.create({
     color: '#111811',
   },
   cancelButton: {
-    backgroundColor: '#FFF',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -424,7 +412,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#111811',
   },
 });
 

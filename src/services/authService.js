@@ -424,9 +424,9 @@ export const authService = {
   },
 
   // OTP Verification
-  async verifyOtp(email, otp) {
+  async verifyOtp(email, otp, type) {
     try {
-      console.log('🔐 Verifying OTP for:', email);
+      console.log('🔐 Verifying OTP for:', email, 'Type:', type);
       console.log('📍 API URL:', `${API_URL}/otp?action=verify`);
       
       const response = await fetchWithRetry(`${API_URL}/otp?action=verify`, {
@@ -434,7 +434,7 @@ export const authService = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({ email, otp, code: otp, type }),
       });
 
       const contentType = response.headers.get('content-type');
@@ -459,9 +459,9 @@ export const authService = {
   },
 
   // Resend OTP
-  async resendOtp(email) {
+  async resendOtp(email, type) {
     try {
-      console.log('📧 Resending OTP to:', email);
+      console.log('📧 Resending OTP to:', email, 'Type:', type);
       console.log('📍 API URL:', `${API_URL}/otp?action=resend`);
       
       const response = await fetchWithRetry(`${API_URL}/otp?action=resend`, {
@@ -469,7 +469,7 @@ export const authService = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, type }),
       });
 
       const contentType = response.headers.get('content-type');

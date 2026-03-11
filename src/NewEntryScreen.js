@@ -15,8 +15,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { diaryService } from './services/diaryService';
+import { useTheme } from './context/ThemeContext';
 
 const MOODS = [
   { id: 'happy', emoji: '😊', label: 'Happy' },
@@ -27,6 +28,8 @@ const MOODS = [
 ];
 
 const NewEntryScreen = ({ onClose, route, ...props }) => {
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   // Handle diaryId and entryId from both route params and direct props
   const initialDiaryId = props.diaryId || route?.params?.diaryId;
@@ -229,27 +232,27 @@ const NewEntryScreen = ({ onClose, route, ...props }) => {
   const themeStyles = {
     container: { backgroundColor: COLORS.backgroundLight },
     textPrimary: { color: COLORS.textMain },
-    textSecondary: { color: COLORS.textGray },
-    moodBg: '#FFFFFF',
-    tagBg: '#F3F4F6',
+    textSecondary: { color: themeColors.textSecondary },
+    moodBg: themeColors.surface,
+    tagBg: themeColors.surface,
   };
 
   return (
-    <View style={[styles.container, themeStyles.container]}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={[styles.safeArea, { paddingTop: 0 }]} edges={['left', 'right', 'bottom']}>
         
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
           <TouchableOpacity style={styles.closeButton} onPress={onClose} disabled={loading || loadingEntry}>
             <MaterialIcons name="close" size={24} color={COLORS.textGray} />
           </TouchableOpacity>
           
           <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, { color: COLORS.textMain }]}>
+            <Text style={[styles.headerTitle, { color: themeColors.text }]}>
               {loadingEntry ? 'Loading...' : entryId ? 'Edit Entry' : 'New Entry'}
             </Text>
-            <Text style={styles.headerDate}>{new Date().toDateString()}</Text>
+            <Text style={[styles.headerDate, { color: themeColors.textMuted }]}>{new Date().toDateString()}</Text>
           </View>
           
           <TouchableOpacity 
@@ -317,9 +320,9 @@ const NewEntryScreen = ({ onClose, route, ...props }) => {
 
                 {/* Title Input */}
                 <TextInput
-                  style={[styles.titleInput, { color: COLORS.textMain }]}
+                  style={[styles.titleInput, { color: themeColors.text }]}
                   placeholder="Entry title (optional)"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={themeColors.textMuted}
                   value={title}
                   onChangeText={setTitle}
                   editable={!loading}
@@ -328,9 +331,9 @@ const NewEntryScreen = ({ onClose, route, ...props }) => {
                 {/* Editor */}
                 <View style={styles.editorContainer}>
                   <TextInput
-                    style={[styles.editor, { color: COLORS.textMain }]}
+                    style={[styles.editor, { color: themeColors.text }]}
                     placeholder="Dear Diary, how was your day?"
-                    placeholderTextColor="#D1D5DB"
+                    placeholderTextColor={themeColors.textMuted}
                     multiline
                     textAlignVertical="top"
                     value={entryText}
@@ -423,18 +426,18 @@ const NewEntryScreen = ({ onClose, route, ...props }) => {
           onRequestClose={() => setShowAddTagModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add New Tag</Text>
+                <Text style={[styles.modalTitle, { color: themeColors.text }]}>Add New Tag</Text>
                 <TouchableOpacity onPress={() => setShowAddTagModal(false)}>
-                  <MaterialIcons name="close" size={24} color={COLORS.textGray} />
+                  <MaterialIcons name="close" size={24} color={themeColors.textMuted} />
                 </TouchableOpacity>
               </View>
 
               <TextInput
-                style={styles.modalInput}
+                style={[styles.modalInput, { color: themeColors.text, borderColor: themeColors.border, backgroundColor: themeColors.background }]}
                 placeholder="Enter tag name (e.g., motivation)"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={themeColors.textMuted}
                 value={newTagInput}
                 onChangeText={setNewTagInput}
                 autoFocus
@@ -442,13 +445,13 @@ const NewEntryScreen = ({ onClose, route, ...props }) => {
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity 
-                  style={[styles.modalButton, styles.cancelButton]}
+                  style={[styles.modalButton, styles.cancelButton, { backgroundColor: themeColors.border }]}
                   onPress={() => {
                     setShowAddTagModal(false);
                     setNewTagInput('');
                   }}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Text style={[styles.cancelButtonText, { color: themeColors.textMuted }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.modalButton, styles.confirmButton]}
@@ -744,7 +747,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 24,
     width: '85%',
@@ -764,18 +766,15 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.textMain,
     fontFamily: 'Manrope_700Bold',
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 14,
     fontFamily: 'Manrope_400Regular',
-    color: COLORS.textMain,
     marginBottom: 20,
   },
   modalButtons: {
@@ -789,13 +788,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelButton: {
-    backgroundColor: '#F3F4F6',
-  },
+  cancelButton: {},
   cancelButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textGray,
     fontFamily: 'Manrope_600SemiBold',
   },
   confirmButton: {

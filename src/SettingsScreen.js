@@ -12,14 +12,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
+import { useTheme } from './context/ThemeContext';
 import ChangePasswordScreen from './ChangePasswordScreen';
 
 const SettingsScreen = ({ onClose, onNavigate }) => {
+  const { isDark, toggleTheme } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState(true);
   const [dailyReminder, setDailyReminder] = useState(true);
-  const [themeMode, setThemeMode] = useState('light'); // light or dark
   const [showChangePassword, setShowChangePassword] = useState(false);
 
   const handleOpenLink = (url) => {
@@ -39,16 +41,16 @@ const SettingsScreen = ({ onClose, onNavigate }) => {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'top']}>
         
         {/* Header */}
-        <View style={[styles.header, { paddingLeft: insets.left, paddingRight: insets.right }]}>
+        <View style={[styles.header, { paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-            <MaterialIcons name="arrow-back" size={28} color="#111811" />
+            <MaterialIcons name="arrow-back" size={28} color={themeColors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Settings</Text>
           <View style={{ width: 28 }} />
         </View>
 
@@ -59,12 +61,12 @@ const SettingsScreen = ({ onClose, onNavigate }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Notifications</Text>
             
-            <View style={styles.settingItem}>
+            <View style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <View style={styles.settingLeft}>
                 <MaterialIcons name="notifications" size={24} color={COLORS.primary} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Enable Notifications</Text>
-                  <Text style={styles.settingDesc}>Get app notifications</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Enable Notifications</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Get app notifications</Text>
                 </View>
               </View>
               <Switch
@@ -75,12 +77,12 @@ const SettingsScreen = ({ onClose, onNavigate }) => {
               />
             </View>
 
-            <View style={styles.settingItem}>
+            <View style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <View style={styles.settingLeft}>
                 <MaterialIcons name="schedule" size={24} color={COLORS.primary} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Daily Writing Reminder</Text>
-                  <Text style={styles.settingDesc}>Remind me to write every day at 8 PM</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Daily Writing Reminder</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Remind me to write every day at 8 PM</Text>
                 </View>
               </View>
               <Switch
@@ -97,28 +99,28 @@ const SettingsScreen = ({ onClose, onNavigate }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Display</Text>
             
-            <TouchableOpacity style={styles.settingItem} onPress={() => setThemeMode('light')}>
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]} onPress={() => isDark && toggleTheme()}>
               <View style={styles.settingLeft}>
-                <MaterialIcons name="light-mode" size={24} color={themeMode === 'light' ? COLORS.primary : '#A8A29E'} />
+                <MaterialIcons name="light-mode" size={24} color={!isDark ? COLORS.primary : '#A8A29E'} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Light Theme</Text>
-                  <Text style={styles.settingDesc}>Light background with dark text</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Light Theme</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Light background with dark text</Text>
                 </View>
               </View>
-              {themeMode === 'light' && (
+              {!isDark && (
                 <MaterialIcons name="check-circle" size={24} color={COLORS.primary} />
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingItem} onPress={() => setThemeMode('dark')}>
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]} onPress={() => !isDark && toggleTheme()}>
               <View style={styles.settingLeft}>
-                <MaterialIcons name="dark-mode" size={24} color={themeMode === 'dark' ? COLORS.primary : '#A8A29E'} />
+                <MaterialIcons name="dark-mode" size={24} color={isDark ? COLORS.primary : '#A8A29E'} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Dark Theme</Text>
-                  <Text style={styles.settingDesc}>Dark background with light text</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Dark Theme</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Dark background with light text</Text>
                 </View>
               </View>
-              {themeMode === 'dark' && (
+              {isDark && (
                 <MaterialIcons name="check-circle" size={24} color={COLORS.primary} />
               )}
             </TouchableOpacity>
@@ -129,36 +131,36 @@ const SettingsScreen = ({ onClose, onNavigate }) => {
             <Text style={styles.sectionTitle}>Privacy & Security</Text>
             
             <TouchableOpacity 
-              style={styles.settingItem}
+              style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
               onPress={() => setShowChangePassword(true)}
             >
               <View style={styles.settingLeft}>
                 <MaterialIcons name="lock" size={24} color={COLORS.primary} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Change Password</Text>
-                  <Text style={styles.settingDesc}>Update your account password</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Change Password</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Update your account password</Text>
                 </View>
               </View>
               <MaterialIcons name="chevron-right" size={24} color="#D4A574" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingItem}>
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <View style={styles.settingLeft}>
                 <MaterialIcons name="privacy-tip" size={24} color={COLORS.primary} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Privacy Policy</Text>
-                  <Text style={styles.settingDesc}>Read our privacy policy</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Privacy Policy</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Read our privacy policy</Text>
                 </View>
               </View>
               <MaterialIcons name="open-in-new" size={20} color="#D4A574" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingItem}>
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <View style={styles.settingLeft}>
                 <MaterialIcons name="description" size={24} color={COLORS.primary} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Terms of Service</Text>
-                  <Text style={styles.settingDesc}>Review our terms & conditions</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Terms of Service</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Review our terms & conditions</Text>
                 </View>
               </View>
               <MaterialIcons name="open-in-new" size={20} color="#D4A574" />
@@ -169,33 +171,33 @@ const SettingsScreen = ({ onClose, onNavigate }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>About</Text>
             
-            <View style={styles.settingItem}>
+            <View style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <View style={styles.settingLeft}>
                 <MaterialIcons name="info" size={24} color={COLORS.primary} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>App Version</Text>
-                  <Text style={styles.settingDesc}>v1.0.0</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>App Version</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>v1.0.0</Text>
                 </View>
               </View>
             </View>
 
-            <TouchableOpacity style={styles.settingItem}>
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <View style={styles.settingLeft}>
                 <MaterialIcons name="help" size={24} color={COLORS.primary} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Help & Support</Text>
-                  <Text style={styles.settingDesc}>Get help or contact us</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Help & Support</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Get help or contact us</Text>
                 </View>
               </View>
               <MaterialIcons name="chevron-right" size={24} color="#D4A574" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingItem}>
+            <TouchableOpacity style={[styles.settingItem, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
               <View style={styles.settingLeft}>
                 <MaterialIcons name="star" size={24} color={COLORS.primary} />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Rate Our App</Text>
-                  <Text style={styles.settingDesc}>Leave a review on the store</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>Rate Our App</Text>
+                  <Text style={[styles.settingDesc, { color: themeColors.textMuted }]}>Leave a review on the store</Text>
                 </View>
               </View>
               <MaterialIcons name="chevron-right" size={24} color="#D4A574" />
@@ -213,7 +215,6 @@ const SettingsScreen = ({ onClose, onNavigate }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FDFBF7',
   },
   header: {
     flexDirection: 'row',
@@ -222,13 +223,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#111811',
   },
   content: {
     flex: 1,
@@ -248,7 +247,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   settingItem: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'transparent',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -257,7 +256,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   settingLeft: {
     flex: 1,
@@ -277,7 +276,6 @@ const styles = StyleSheet.create({
   settingDesc: {
     fontSize: 12,
     fontFamily: 'Manrope_400Regular',
-    color: '#A8A29E',
     marginTop: 4,
   },
 });

@@ -15,12 +15,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { diaryService } from './services/diaryService';
+import { useTheme } from './context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
 const ManageDiariesScreen = ({ onClose, onSelectDiary }) => {
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   const [diaries, setDiaries] = useState([]);
   const [loading, setLoading] = useState(true);

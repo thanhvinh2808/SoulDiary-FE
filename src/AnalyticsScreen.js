@@ -14,8 +14,9 @@ import {
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { diaryService } from './services/diaryService';
+import { useTheme } from './context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 const ANALYTICS_COLORS = {
@@ -32,6 +33,8 @@ const ANALYTICS_COLORS = {
 };
 
 const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...props }) => {
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   // Handle diaryId from both route.params and direct props
   const [diaryId, setDiaryId] = useState(props.route?.params?.diaryId || passedDiaryId);
@@ -181,16 +184,16 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
   const displayStats = totalPercent > 0 ? timeframeStats : moodStats;
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
           <TouchableOpacity style={styles.backButton} onPress={() => onNavigate('Home')}>
-            <MaterialIcons name="arrow-back-ios" size={20} color={ANALYTICS_COLORS.textDark} />
+            <MaterialIcons name="arrow-back-ios" size={20} color={themeColors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{timeframe === '7days' ? 'Weekly' : 'Monthly'} Overview</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>{timeframe === '7days' ? 'Weekly' : 'Monthly'} Overview</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -202,29 +205,29 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
           <ScrollView showsVerticalScrollIndicator={false}>
             
             {/* Segmented Control */}
-            <View style={styles.segmentedWrapper}>
-              <View style={styles.segmentedBg}>
+            <View style={[styles.segmentedWrapper]}>
+              <View style={[styles.segmentedBg, { backgroundColor: themeColors.background }]}>
                 <TouchableOpacity 
-                  style={[styles.segment, timeframe === '7days' && styles.segmentActive]}
+                  style={[styles.segment, timeframe === '7days' && [styles.segmentActive, { backgroundColor: themeColors.surface }]]}
                   onPress={() => setTimeframe('7days')}
                 >
-                  <Text style={[styles.segmentText, timeframe === '7days' && styles.segmentTextActive]}>Last 7 Days</Text>
+                  <Text style={[styles.segmentText, { color: themeColors.textMuted }, timeframe === '7days' && [styles.segmentTextActive, { color: themeColors.text }]]}>Last 7 Days</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.segment, timeframe === '30days' && styles.segmentActive]}
+                  style={[styles.segment, timeframe === '30days' && [styles.segmentActive, { backgroundColor: themeColors.surface }]]}
                   onPress={() => setTimeframe('30days')}
                 >
-                  <Text style={[styles.segmentText, timeframe === '30days' && styles.segmentTextActive]}>Last 30 Days</Text>
+                  <Text style={[styles.segmentText, { color: themeColors.textMuted }, timeframe === '30days' && [styles.segmentTextActive, { color: themeColors.text }]]}>Last 30 Days</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Chart Card */}
             <View style={styles.cardWrapper}>
-              <View style={styles.chartCard}>
-                <Text style={styles.chartSub}>Emotional Journey</Text>
+              <View style={[styles.chartCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+                <Text style={[styles.chartSub, { color: themeColors.textMuted }]}>Emotional Journey</Text>
                 <View style={styles.chartMainInfo}>
-                  <Text style={styles.chartTitle}>{overallMood}</Text>
+                  <Text style={[styles.chartTitle, { color: themeColors.text }]}>{overallMood}</Text>
                   <View style={[styles.trendBadge, { backgroundColor: trendDifference >= 0 ? '#E7F5E8' : '#FFE7E7' }]}>
                     <Text style={[styles.trendText, { color: trendDifference >= 0 ? '#078810' : '#C41E3A' }]}>
                       {trendDifference >= 0 ? '+' : ''}{trendDifference}% vs last {timeframe === '7days' ? 'week' : 'month'}
@@ -261,7 +264,7 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
                   {/* Days Labels */}
                   <View style={styles.daysLabels}>
                     {(timeframe === '7days' ? ['M', 'T', 'W', 'T', 'F', 'S', 'S'] : ['W1', 'W2', 'W3', 'W4']).map((day, i) => (
-                      <Text key={i} style={styles.dayLabel}>
+                      <Text key={i} style={[styles.dayLabel, { color: themeColors.textMuted }]}>
                         {day}
                       </Text>
                     ))}
@@ -272,28 +275,28 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
 
             {/* Insights */}
             <View style={styles.insightSection}>
-              <Text style={styles.insightTitle}>
+              <Text style={[styles.insightTitle, { color: themeColors.text }]}>
                 You felt mostly <Text style={{ color: ANALYTICS_COLORS.primary }}>{overallMood}</Text> this {timeframe === '7days' ? 'week' : 'month'}
               </Text>
-              <Text style={styles.insightDesc}>
+              <Text style={[styles.insightDesc, { color: themeColors.textSecondary }]}>
                 {entries.length} total entries recorded. Keep journaling to track your emotional patterns.
               </Text>
             </View>
 
             {/* Mood Breakdown */}
             <View style={styles.breakdownSection}>
-              <Text style={styles.breakdownTitle}>MOOD BREAKDOWN</Text>
+              <Text style={[styles.breakdownTitle, { color: themeColors.text }]}>MOOD BREAKDOWN</Text>
               
               {/* Happy */}
               <View style={styles.progressItem}>
                 <View style={styles.progressHeader}>
                   <View style={styles.labelGroup}>
                     <View style={[styles.dot, { backgroundColor: ANALYTICS_COLORS.happy }]} />
-                    <Text style={styles.progressLabel}>Happy</Text>
+                    <Text style={[styles.progressLabel, { color: themeColors.text }]}>Happy</Text>
                   </View>
-                  <Text style={styles.progressPercent}>{displayStats.happy}%</Text>
+                  <Text style={[styles.progressPercent, { color: themeColors.text }]}>{displayStats.happy}%</Text>
                 </View>
-                <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarBg, { backgroundColor: themeColors.background }]}>
                   <View style={[styles.progressBarFill, { width: `${displayStats.happy}%`, backgroundColor: ANALYTICS_COLORS.happy }]} />
                 </View>
               </View>
@@ -303,11 +306,11 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
                 <View style={styles.progressHeader}>
                   <View style={styles.labelGroup}>
                     <View style={[styles.dot, { backgroundColor: ANALYTICS_COLORS.neutral }]} />
-                    <Text style={styles.progressLabel}>Calm</Text>
+                    <Text style={[styles.progressLabel, { color: themeColors.text }]}>Calm</Text>
                   </View>
-                  <Text style={styles.progressPercent}>{displayStats.neutral}%</Text>
+                  <Text style={[styles.progressPercent, { color: themeColors.text }]}>{displayStats.neutral}%</Text>
                 </View>
-                <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarBg, { backgroundColor: themeColors.background }]}>
                   <View style={[styles.progressBarFill, { width: `${displayStats.neutral}%`, backgroundColor: ANALYTICS_COLORS.neutral }]} />
                 </View>
               </View>
@@ -317,11 +320,11 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
                 <View style={styles.progressHeader}>
                   <View style={styles.labelGroup}>
                     <View style={[styles.dot, { backgroundColor: ANALYTICS_COLORS.sad }]} />
-                    <Text style={styles.progressLabel}>Sad</Text>
+                    <Text style={[styles.progressLabel, { color: themeColors.text }]}>Sad</Text>
                   </View>
-                  <Text style={styles.progressPercent}>{displayStats.sad}%</Text>
+                  <Text style={[styles.progressPercent, { color: themeColors.text }]}>{displayStats.sad}%</Text>
                 </View>
-                <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarBg, { backgroundColor: themeColors.background }]}>
                   <View style={[styles.progressBarFill, { width: `${displayStats.sad}%`, backgroundColor: ANALYTICS_COLORS.sad }]} />
                 </View>
               </View>
@@ -331,11 +334,11 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
                 <View style={styles.progressHeader}>
                   <View style={styles.labelGroup}>
                     <View style={[styles.dot, { backgroundColor: ANALYTICS_COLORS.anxious }]} />
-                    <Text style={styles.progressLabel}>Anxious</Text>
+                    <Text style={[styles.progressLabel, { color: themeColors.text }]}>Anxious</Text>
                   </View>
-                  <Text style={styles.progressPercent}>{displayStats.anxious}%</Text>
+                  <Text style={[styles.progressPercent, { color: themeColors.text }]}>{displayStats.anxious}%</Text>
                 </View>
-                <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarBg, { backgroundColor: themeColors.background }]}>
                   <View style={[styles.progressBarFill, { width: `${displayStats.anxious}%`, backgroundColor: ANALYTICS_COLORS.anxious }]} />
                 </View>
               </View>
@@ -345,11 +348,11 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
                 <View style={styles.progressHeader}>
                   <View style={styles.labelGroup}>
                     <View style={[styles.dot, { backgroundColor: ANALYTICS_COLORS.angry }]} />
-                    <Text style={styles.progressLabel}>Angry</Text>
+                    <Text style={[styles.progressLabel, { color: themeColors.text }]}>Angry</Text>
                   </View>
-                  <Text style={styles.progressPercent}>{displayStats.angry}%</Text>
+                  <Text style={[styles.progressPercent, { color: themeColors.text }]}>{displayStats.angry}%</Text>
                 </View>
-                <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarBg, { backgroundColor: themeColors.background }]}>
                   <View style={[styles.progressBarFill, { width: `${displayStats.angry}%`, backgroundColor: ANALYTICS_COLORS.angry }]} />
                 </View>
               </View>
@@ -357,12 +360,12 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
 
             {/* Insights Card */}
             <View style={styles.cardWrapper}>
-              <View style={styles.triggersCard}>
+              <View style={[styles.triggersCard, { backgroundColor: isDark ? `${ANALYTICS_COLORS.primary}15` : 'rgba(244, 175, 37, 0.1)', borderColor: isDark ? `${ANALYTICS_COLORS.primary}30` : 'rgba(244, 175, 37, 0.2)' }]}>
                 <View style={styles.triggersHeader}>
                   <MaterialIcons name="auto-awesome" size={20} color={ANALYTICS_COLORS.primary} />
-                  <Text style={styles.triggersTitle}>Keep Journaling</Text>
+                  <Text style={[styles.triggersTitle, { color: themeColors.text }]}>Keep Journaling</Text>
                 </View>
-                <Text style={styles.insightDesc}>
+                <Text style={[styles.insightDesc, { color: themeColors.textSecondary }]}>
                   More entries = Better insights. Share what makes you feel good or bad!
                 </Text>
               </View>
@@ -373,18 +376,18 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
         )}
 
         {/* Bottom Navigation */}
-        <View style={styles.bottomNav}>
+        <View style={[styles.bottomNav, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
           <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Home')}>
-            <MaterialIcons name="home" size={28} color="#A8A29E" />
-            <Text style={styles.navLabel}>Home</Text>
+            <MaterialIcons name="home" size={28} color={themeColors.textMuted} />
+            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Home</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History', { diaryId })}>
-            <MaterialIcons name="menu-book" size={28} color="#A8A29E" />
-            <Text style={styles.navLabel}>Diary</Text>
+            <MaterialIcons name="menu-book" size={28} color={themeColors.textMuted} />
+            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Diary</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar', { diaryId })}>
-            <MaterialIcons name="calendar-today" size={28} color="#A8A29E" />
-            <Text style={styles.navLabel}>Calendar</Text>
+            <MaterialIcons name="calendar-today" size={28} color={themeColors.textMuted} />
+            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Calendar</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics')}>
             <MaterialIcons name="analytics" size={28} color={COLORS.primary} />
@@ -399,7 +402,7 @@ const AnalyticsScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pr
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: ANALYTICS_COLORS.bgLight,
+    backgroundColor: 'transparent', // Will be set by themeColors.background inline
   },
   header: {
     flexDirection: 'row',
@@ -414,7 +417,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 18,
     fontWeight: '800',
-    color: ANALYTICS_COLORS.textDark,
     fontFamily: 'Manrope_800ExtraBold',
     marginRight: 40, // Balance back button
   },
@@ -424,7 +426,6 @@ const styles = StyleSheet.create({
   },
   segmentedBg: {
     flexDirection: 'row',
-    backgroundColor: '#EDECE9',
     borderRadius: 12,
     padding: 6,
     height: 48,
@@ -436,7 +437,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   segmentActive: {
-    backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -446,22 +446,19 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8A7C60',
     fontFamily: 'Manrope_600SemiBold',
   },
   segmentTextActive: {
-    color: ANALYTICS_COLORS.textDark,
+    fontWeight: '700',
   },
   cardWrapper: {
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   chartCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 24,
     borderWidth: 1,
-    borderColor: ANALYTICS_COLORS.cardBorder,
     shadowColor: ANALYTICS_COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -470,7 +467,6 @@ const styles = StyleSheet.create({
   },
   chartSub: {
     fontSize: 14,
-    color: '#8A7C60',
     fontWeight: '500',
     marginBottom: 4,
   },
@@ -483,7 +479,6 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: ANALYTICS_COLORS.textDark,
     fontFamily: 'Manrope_800ExtraBold',
   },
   trendBadge: {
@@ -510,7 +505,6 @@ const styles = StyleSheet.create({
   dayLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#8A7C60',
   },
   dayLabelActive: {
     color: ANALYTICS_COLORS.primary,
@@ -525,12 +519,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     textAlign: 'center',
-    color: ANALYTICS_COLORS.textDark,
     lineHeight: 30,
   },
   insightDesc: {
     fontSize: 16,
-    color: '#5C5340',
     textAlign: 'center',
     lineHeight: 24,
     marginTop: 12,
@@ -544,7 +536,6 @@ const styles = StyleSheet.create({
   breakdownTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: ANALYTICS_COLORS.textDark,
     letterSpacing: 1.2,
     marginBottom: 4,
   },
@@ -569,16 +560,13 @@ const styles = StyleSheet.create({
   progressLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: ANALYTICS_COLORS.textDark,
   },
   progressPercent: {
     fontSize: 14,
     fontWeight: '800',
-    color: ANALYTICS_COLORS.textDark,
   },
   progressBarBg: {
     height: 8,
-    backgroundColor: '#EDECE9',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -587,11 +575,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   triggersCard: {
-    backgroundColor: 'rgba(244, 175, 37, 0.1)',
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(244, 175, 37, 0.2)',
   },
   triggersHeader: {
     flexDirection: 'row',
@@ -602,7 +588,6 @@ const styles = StyleSheet.create({
   triggersTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: ANALYTICS_COLORS.textDark,
   },
   bottomNav: {
     position: 'absolute',
@@ -615,8 +600,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingBottom: Platform.OS === 'ios' ? 32 : 12,
     borderTopWidth: 1,
-    borderTopColor: '#E7E5E4',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   navItem: {
     flex: 1,
@@ -627,7 +610,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#A8A29E',
   },
 });
 
