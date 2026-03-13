@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Text,
+  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from './context/ThemeContext';
@@ -41,6 +42,7 @@ const HomeScreen = ({ onNavigate }) => {
   // State
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [currentDiaryId, setCurrentDiaryId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeMenuScreen, setActiveMenuScreen] = useState(null);
@@ -55,7 +57,7 @@ const HomeScreen = ({ onNavigate }) => {
   // Fetch diary data
   const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!refreshing) setLoading(true);
       let diaries = await diaryService.getDiaries();
 
       if (!diaries || diaries.length === 0) {
@@ -86,10 +88,16 @@ const HomeScreen = ({ onNavigate }) => {
       setEntries([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [refreshing]);
 
   useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
     fetchData();
   }, [fetchData]);
 
@@ -156,7 +164,7 @@ const HomeScreen = ({ onNavigate }) => {
         {/* Header */}
         <HomeHeader
           onMenuPress={() => setMenuOpen(true)}
-          onRefresh={fetchData}
+          onRefresh={onRefresh}
           onProfilePress={() => onNavigate('Profile')}
           themeColors={themeColors}
         />
@@ -165,6 +173,13 @@ const HomeScreen = ({ onNavigate }) => {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh} 
+              colors={[COLORS.primary]} 
+            />
+          }
         >
           {/* Daily Quote */}
           <DailyQuoteCard quote={dailyQuote} themeColors={themeColors} />
@@ -201,7 +216,7 @@ const HomeScreen = ({ onNavigate }) => {
 
           {/* Entries List */}
           <View style={styles.entriesList}>
-            {loading ? (
+            {loading && !refreshing ? (
               <LoadingSpinner />
             ) : paginatedEntries.length > 0 ? (
               paginatedEntries.map((entry) => (
