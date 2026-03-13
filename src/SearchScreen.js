@@ -13,16 +13,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { diaryService } from './services/diaryService';
+import { useTheme } from './context/ThemeContext';
 
 const SearchScreen = ({ onClose, diaryId, onSelectEntry }) => {
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
+  const [results, setResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMoods, setSelectedMoods] = useState([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -159,36 +162,36 @@ const SearchScreen = ({ onClose, diaryId, onSelectEntry }) => {
   );
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'top']}>
         
         {/* Header */}
-        <View style={[styles.header, { paddingLeft: insets.left, paddingRight: insets.right }]}>
+        <View style={[styles.header, { paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-            <MaterialIcons name="arrow-back" size={28} color="#111811" />
+            <MaterialIcons name="arrow-back" size={28} color={themeColors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Search Entries</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Search Entries</Text>
           <View style={{ width: 28 }} />
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={[styles.content, { backgroundColor: themeColors.background }]} showsVerticalScrollIndicator={false}>
           
           {/* Search Input */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Keyword Search</Text>
-            <View style={styles.searchInputContainer}>
-              <MaterialIcons name="search" size={20} color="#A8A29E" />
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Keyword Search</Text>
+            <View style={[styles.searchInputContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+              <MaterialIcons name="search" size={20} color={themeColors.textMuted} />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { color: themeColors.text }]}
                 placeholder="Search by title or content..."
-                placeholderTextColor="#A8A29E"
+                placeholderTextColor={themeColors.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
               {searchQuery && (
                 <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <MaterialIcons name="close" size={20} color="#A8A29E" />
+                  <MaterialIcons name="close" size={20} color={themeColors.textMuted} />
                 </TouchableOpacity>
               )}
             </View>
@@ -196,7 +199,7 @@ const SearchScreen = ({ onClose, diaryId, onSelectEntry }) => {
 
           {/* Mood Filter */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Filter by Mood</Text>
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Filter by Mood</Text>
             <View style={styles.moodGrid}>
               {MOODS.map(mood => (
                 <TouchableOpacity
@@ -221,16 +224,16 @@ const SearchScreen = ({ onClose, diaryId, onSelectEntry }) => {
 
           {/* Date Range Filter */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Date Range (Optional)</Text>
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Date Range (Optional)</Text>
             
             <View>
-              <Text style={styles.labelText}>From:</Text>
-              <View style={styles.dateInputContainer}>
+              <Text style={[styles.labelText, { color: themeColors.text }]}>From:</Text>
+              <View style={[styles.dateInputContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
                 <MaterialIcons name="calendar-today" size={20} color={COLORS.primary} />
                 <TextInput
-                  style={styles.dateInput}
+                  style={[styles.dateInput, { color: themeColors.text }]}
                   placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#A8A29E"
+                  placeholderTextColor={themeColors.textMuted}
                   value={startDate}
                   onChangeText={setStartDate}
                 />
@@ -238,13 +241,13 @@ const SearchScreen = ({ onClose, diaryId, onSelectEntry }) => {
             </View>
 
             <View style={{ marginTop: 12 }}>
-              <Text style={styles.labelText}>To:</Text>
-              <View style={styles.dateInputContainer}>
+              <Text style={[styles.labelText, { color: themeColors.text }]}>To:</Text>
+              <View style={[styles.dateInputContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
                 <MaterialIcons name="calendar-today" size={20} color={COLORS.primary} />
                 <TextInput
-                  style={styles.dateInput}
+                  style={[styles.dateInput, { color: themeColors.text }]}
                   placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#A8A29E"
+                  placeholderTextColor={themeColors.textMuted}
                   value={endDate}
                   onChangeText={setEndDate}
                 />
@@ -255,11 +258,11 @@ const SearchScreen = ({ onClose, diaryId, onSelectEntry }) => {
           {/* Action Buttons */}
           <View style={styles.buttonGroup}>
             <TouchableOpacity
-              style={[styles.button, styles.clearButton]}
+              style={[styles.button, styles.clearButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
               onPress={handleClear}
             >
-              <MaterialIcons name="refresh" size={20} color="#111811" />
-              <Text style={[styles.buttonText, { color: '#111811' }]}>Clear</Text>
+              <MaterialIcons name="refresh" size={20} color={themeColors.text} />
+              <Text style={[styles.buttonText, { color: themeColors.text }]}>Clear</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

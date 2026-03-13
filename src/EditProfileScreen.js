@@ -17,8 +17,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { authService } from './services/authService';
+import { useTheme } from './context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 375;
@@ -26,9 +27,11 @@ const isMediumScreen = width >= 375 && width < 450;
 const isTablet = width >= 768;
 
 const EditProfileScreen = ({ onNavigate, params }) => {
-  const isDark = false;
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   const initialUser = params?.user;
+  const [loading, setLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -37,8 +40,6 @@ const EditProfileScreen = ({ onNavigate, params }) => {
     bio: '',
     profileImage: ''
   });
-
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -149,15 +150,15 @@ const EditProfileScreen = ({ onNavigate, params }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
           <TouchableOpacity onPress={() => onNavigate('Profile')}>
-            <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
+            <MaterialIcons name="arrow-back" size={24} color={themeColors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Profile</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.text }]}>Edit Profile</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -176,7 +177,7 @@ const EditProfileScreen = ({ onNavigate, params }) => {
             >
               {/* Profile Image Preview */}
               <View style={styles.imageSection}>
-                <View style={styles.profileImagePreview}>
+                <View style={[styles.profileImagePreview, { backgroundColor: themeColors.surface, borderColor: COLORS.primary }]}>
                   {formData.profileImage ? (
                     <Image
                       source={{ uri: formData.profileImage }}
@@ -186,9 +187,9 @@ const EditProfileScreen = ({ onNavigate, params }) => {
                     <MaterialIcons name="person" size={isSmallScreen ? 36 : 48} color={COLORS.primary} />
                   )}
                 </View>
-                <TouchableOpacity style={styles.changePhotoButton}>
+                <TouchableOpacity style={[styles.changePhotoButton, { backgroundColor: themeColors.surface, borderColor: COLORS.primary }]}>
                   <MaterialIcons name="camera-alt" size={16} color={COLORS.primary} />
-                  <Text style={styles.changePhotoText}>Change Photo</Text>
+                  <Text style={[styles.changePhotoText, { color: COLORS.primary }]}>Change Photo</Text>
                 </TouchableOpacity>
               </View>
 
@@ -197,31 +198,31 @@ const EditProfileScreen = ({ onNavigate, params }) => {
                 
                 {/* Name Field */}
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Full Name *</Text>
-                  <View style={[styles.inputWrapper, errors.name && styles.inputError]}>
+                  <Text style={[styles.label, { color: themeColors.text }]}>Full Name *</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: themeColors.surface, borderColor: themeColors.border }, errors.name && styles.inputError]}>
                     <MaterialIcons name="person-outline" size={18} color={COLORS.primary} />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { color: themeColors.text }]}
                       placeholder="Enter your full name"
-                      placeholderTextColor={COLORS.textLightGray}
+                      placeholderTextColor={themeColors.textMuted}
                       value={formData.name}
                       onChangeText={(text) => handleInputChange('name', text)}
                       maxLength={50}
                     />
                   </View>
                   {errors.name && <Text style={styles.errorMessage}>{errors.name}</Text>}
-                  <Text style={styles.charCount}>{formData.name.length}/50</Text>
+                  <Text style={[styles.charCount, { color: themeColors.textMuted }]}>{formData.name.length}/50</Text>
                 </View>
 
                 {/* Phone Field */}
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Phone</Text>
-                  <View style={[styles.inputWrapper, errors.phone && styles.inputError]}>
+                  <Text style={[styles.label, { color: themeColors.text }]}>Phone</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: themeColors.surface, borderColor: themeColors.border }, errors.phone && styles.inputError]}>
                     <MaterialIcons name="phone" size={18} color={COLORS.primary} />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { color: themeColors.text }]}
                       placeholder="Your phone number"
-                      placeholderTextColor={COLORS.textLightGray}
+                      placeholderTextColor={themeColors.textMuted}
                       value={formData.phone}
                       onChangeText={(text) => handleInputChange('phone', text)}
                       keyboardType="phone-pad"
@@ -232,13 +233,13 @@ const EditProfileScreen = ({ onNavigate, params }) => {
 
                 {/* Email Field */}
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Email</Text>
-                  <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
+                  <Text style={[styles.label, { color: themeColors.text }]}>Email</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: themeColors.surface, borderColor: themeColors.border }, errors.email && styles.inputError]}>
                     <MaterialIcons name="mail-outline" size={18} color={COLORS.primary} />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { color: themeColors.text }]}
                       placeholder="your@email.com"
-                      placeholderTextColor={COLORS.textLightGray}
+                      placeholderTextColor={themeColors.textMuted}
                       value={formData.email}
                       onChangeText={(text) => handleInputChange('email', text)}
                       keyboardType="email-address"
@@ -246,17 +247,17 @@ const EditProfileScreen = ({ onNavigate, params }) => {
                     />
                   </View>
                   {errors.email && <Text style={styles.errorMessage}>{errors.email}</Text>}
-                  <Text style={styles.helpText}>Email cannot be changed</Text>
+                  <Text style={[styles.helpText, { color: themeColors.textMuted }]}>Email cannot be changed</Text>
                 </View>
 
                 {/* Bio Field */}
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Bio</Text>
-                  <View style={[styles.inputWrapper, styles.bioWrapper, errors.bio && styles.inputError]}>
+                  <Text style={[styles.label, { color: themeColors.text }]}>Bio</Text>
+                  <View style={[styles.inputWrapper, styles.bioWrapper, { backgroundColor: themeColors.surface, borderColor: themeColors.border }, errors.bio && styles.inputError]}>
                     <TextInput
-                      style={[styles.input, styles.bioInput]}
+                      style={[styles.input, styles.bioInput, { color: themeColors.text }]}
                       placeholder="Tell us about yourself (max 160 characters)"
-                      placeholderTextColor={COLORS.textLightGray}
+                      placeholderTextColor={themeColors.textMuted}
                       value={formData.bio}
                       onChangeText={(text) => handleInputChange('bio', text)}
                       maxLength={160}
@@ -266,16 +267,16 @@ const EditProfileScreen = ({ onNavigate, params }) => {
                     />
                   </View>
                   {errors.bio && <Text style={styles.errorMessage}>{errors.bio}</Text>}
-                  <Text style={styles.charCount}>{formData.bio.length}/160</Text>
+                  <Text style={[styles.charCount, { color: themeColors.textMuted }]}>{formData.bio.length}/160</Text>
                 </View>
 
                 {/* Action Buttons */}
                 <View style={styles.buttonGroup}>
                   <TouchableOpacity 
-                    style={styles.cancelButton}
+                    style={[styles.cancelButton, { borderColor: COLORS.primary, backgroundColor: themeColors.surface }]}
                     onPress={() => onNavigate('Profile')}
                   >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                    <Text style={[styles.cancelButtonText, { color: COLORS.primary }]}>Cancel</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -307,7 +308,6 @@ const EditProfileScreen = ({ onNavigate, params }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundLight,
   },
   header: {
     flexDirection: 'row',
@@ -316,12 +316,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: isSmallScreen ? 12 : 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
   },
   headerTitle: {
     fontSize: isSmallScreen ? 16 : 18,
     fontWeight: '700',
-    color: COLORS.textMain,
   },
   scrollContent: {
     flexGrow: 1,
@@ -337,11 +335,9 @@ const styles = StyleSheet.create({
     width: isSmallScreen ? 90 : 100,
     height: isSmallScreen ? 90 : 100,
     borderRadius: isSmallScreen ? 45 : 50,
-    backgroundColor: COLORS.beigeAccent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: COLORS.primary,
     overflow: 'hidden',
     marginBottom: isSmallScreen ? 8 : 12,
   },
@@ -351,15 +347,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: isSmallScreen ? 12 : 16,
     paddingVertical: isSmallScreen ? 6 : 8,
-    backgroundColor: COLORS.beigeAccent,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.primary,
   },
   changePhotoText: {
     fontSize: isSmallScreen ? 12 : 13,
     fontWeight: '600',
-    color: COLORS.primary,
   },
   formSection: {
     gap: isSmallScreen ? 18 : 24,
@@ -370,18 +363,15 @@ const styles = StyleSheet.create({
   label: {
     fontSize: isSmallScreen ? 13 : 14,
     fontWeight: '700',
-    color: COLORS.textMain,
     marginBottom: 4,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingHorizontal: 14,
     height: 52,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
     gap: 10,
   },
   bioWrapper: {
@@ -392,7 +382,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: isSmallScreen ? 14 : 15,
-    color: COLORS.textMain,
     fontWeight: '500',
   },
   bioInput: {
@@ -415,12 +404,10 @@ const styles = StyleSheet.create({
   },
   helpText: {
     fontSize: isSmallScreen ? 11 : 12,
-    color: COLORS.textLightGray,
     fontWeight: '500',
   },
   charCount: {
     fontSize: isSmallScreen ? 11 : 12,
-    color: COLORS.textLightGray,
     textAlign: 'right',
     marginTop: 4,
   },
@@ -434,14 +421,12 @@ const styles = StyleSheet.create({
     height: isSmallScreen ? 48 : 52,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelButtonText: {
     fontSize: isSmallScreen ? 13 : 15,
     fontWeight: '700',
-    color: COLORS.primary,
   },
   saveButton: {
     flex: 1,

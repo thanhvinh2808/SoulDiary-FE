@@ -1,171 +1,204 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
-  TextInput,
   Platform,
   KeyboardAvoidingView,
   ScrollView,
   Alert,
-  ActivityIndicator
+  Linking,
+  SafeAreaView,
+  Modal,
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import * as Facebook from 'expo-auth-session/providers/facebook';
-import { makeRedirectUri } from 'expo-auth-session';
-
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { authService } from './services/authService';
+import { useTheme } from './context/ThemeContext';
 
-// 🔧 BẮT BUỘC: Hoàn thành auth session
+// Components
+import FormInput from './components/Auth/FormInput';
+import SocialButtons from './components/Auth/SocialButtons';
+import { FormLabel, ErrorMessage, Divider } from './components/Auth/FormElements';
+
 WebBrowser.maybeCompleteAuthSession();
 
-const AuthScreen = ({ onLoginSuccess, onForgotPassword }) => {
-  // State quản lý UI
+const AuthScreen = ({ onLoginSuccess, onForgotPassword: onForgotPasswordCallback }) => {
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
+  const oauthTimeoutRef = useRef(null);
+
+  // Auth Form State
   const [isRegister, setIsRegister] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  
-  // State Form
   const [fullName, setFullName] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // 🔧 REDIRECT URI - Để Expo tự quyết định URI tốt nhất cho môi trường Native
-  const redirectUri = makeRedirectUri({
-    scheme: 'souldiary',
-     useProxy: false,
-  });
+  // OTP Modal State
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [registrationEmail, setRegistrationEmail] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpModalSource, setOtpModalSource] = useState('auto'); // 'auto' for after register, 'manual' for manual verify
+  const [otpType, setOtpType] = useState(''); // 'register' or 'forgotPassword'
 
-  // Log để bạn copy chính xác vào Google Console
+  // OAuth Flow
   useEffect(() => {
-    console.log('--- COPY LINK NÀY VÀO GOOGLE CONSOLE ---');
-    console.log(redirectUri);
-    console.log('---------------------------------------');
-  }, [redirectUri]);
-
-  // ✅ GOOGLE AUTH CONFIG
-  const [gRequest, gResponse, promptGoogleAsync] = Google.useAuthRequest({
-    androidClientId: '41247382516-hedjbqieuige5lfkolt3flctolms69ta.apps.googleusercontent.com',
-    webClientId: '41247382516-1nbdp00km72e261hcipuqcamb9dttu8d.apps.googleusercontent.com',
-    iosClientId: '41247382516-hbui90gsqmtbdagni8sho68ffhfisv4p.apps.googleusercontent.com',
-
-  });
-
-  // Gọi hàm prompt trực tiếp
-  const handleGoogleLogin = () => {
-    promptGoogleAsync();
-  };
-
-  // ✅ FACEBOOK AUTH CONFIG
-  const [fRequest, fResponse, promptFacebookAsync] = Facebook.useAuthRequest({
-    clientId: '913094248341605',
-  });
-
-  // 🔧 XỬ LÝ GOOGLE RESPONSE
-  useEffect(() => {
-    if (gResponse?.type === 'success') {
-      const { authentication } = gResponse;
+    const handleDeepLink = ({ url }) => {
+      if (!url) return;
       
-      // Backend sử dụng google-auth-library để verify JWT, nên ƯU TIÊN dùng idToken
-      // idToken chứa thông tin user an toàn (name, email, photo)
-      const token = authentication?.idToken || authentication?.accessToken;
-      
-      if (token) {
-        console.log(`🔵 Google Login: Sending ${authentication?.idToken ? 'idToken' : 'accessToken'} to server`);
-        handleSocialLogin('google', token);
-      } else {
-        Alert.alert('Error', 'Failed to get Google token');
+      // Clear timeout if we get a valid callback
+      if (oauthTimeoutRef.current) {
+        clearTimeout(oauthTimeoutRef.current);
+        oauthTimeoutRef.current = null;
       }
-    } else if (gResponse?.type === 'error') {
-      Alert.alert(
-        'Google Login Failed', 
-        gResponse.error?.message || 'An error occurred'
-      );
-    }
-  }, [gResponse]);
 
-  // 🔧 XỬ LÝ FACEBOOK RESPONSE
-  useEffect(() => {
-    if (fResponse?.type === 'success') {
-      const { authentication } = fResponse;
-      
-      if (authentication?.accessToken) {
-        handleSocialLogin('facebook', authentication.accessToken);
-      } else {
-        Alert.alert('Error', 'Failed to get Facebook token');
-      }
-    } else if (fResponse?.type === 'error') {
-      Alert.alert(
-        'Facebook Login Failed', 
-        fResponse.error?.message || 'An error occurred'
-      );
-    }
-  }, [fResponse]);
+      try {
+        const urlObj = new URL(url);
+        const token = urlObj.searchParams.get('token');
+        const error = urlObj.searchParams.get('error');
+        const provider = urlObj.searchParams.get('provider');
 
-  // 🔧 XỬ LÝ SOCIAL LOGIN - Gửi token lên backend
-  const handleSocialLogin = async (provider, token) => {
-    setLoading(true);
-    try {
-      let data;
-      if (provider === 'google') {
-        data = await authService.loginGoogle(token);
-      } else if (provider === 'facebook') {
-        data = await authService.loginFacebook(token);
-      }
-      
-      console.log(`✅ ${provider} login response:`, JSON.stringify(data, null, 2));
-
-      // Kiểm tra thành công dựa trên cấu trúc trả về từ backend controller
-      // Backend: { status: "success", token: { ... }, data: { user: ... } }
-      if (data && (data.status === 'success' || data.token)) {
-        const user = data.data?.user || data.user;
-        if (user) {
-          onLoginSuccess(user);
-        } else {
-           console.warn('⚠️ Login success but no user data found in response');
-           // Vẫn gọi onLoginSuccess để bypass nếu cần thiết, hoặc báo lỗi
-           onLoginSuccess({ name: 'User', email: 'user@example.com' }); 
+        if (error) {
+          setLoading(false);
+          Alert.alert('Login Failed', decodeURIComponent(error));
+          return;
         }
-      } else {
-        throw new Error(data?.message || 'Cấu trúc dữ liệu từ server không hợp lệ');
+
+        if (token) {
+          handleSocialLogin(provider, token);
+        }
+      } catch (error) {
+        console.error('⚠️ Error parsing OAuth callback:', error.message);
+        setLoading(false);
+      }
+    };
+
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    return () => {
+      subscription.remove();
+      // Cleanup timeout on unmount
+      if (oauthTimeoutRef.current) {
+        clearTimeout(oauthTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // OAuth Handlers
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      const { API_URL } = require('./config');
+      const oauthUrl = `${API_URL}/auth?action=google-oauth&redirect=souldiary://oauth-callback`;
+      
+      oauthTimeoutRef.current = setTimeout(() => {
+        setLoading(false);
+        Alert.alert('Login Cancelled', 'OAuth flow was not completed. Please try again.');
+        oauthTimeoutRef.current = null;
+      }, 120000);
+      
+      const result = await WebBrowser.openBrowserAsync(oauthUrl);
+      
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        if (oauthTimeoutRef.current) {
+          clearTimeout(oauthTimeoutRef.current);
+          oauthTimeoutRef.current = null;
+        }
+        setLoading(false);
       }
     } catch (error) {
-      console.error(`❌ ${provider} login failed:`, error);
-      Alert.alert('Đăng nhập thất bại', error.message || 'Không thể kết nối tới máy chủ');
-    } finally {
+      if (oauthTimeoutRef.current) {
+        clearTimeout(oauthTimeoutRef.current);
+        oauthTimeoutRef.current = null;
+      }
+      setLoading(false);
+      Alert.alert('Google Login Failed', error.message);
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    try {
+      setLoading(true);
+      const { API_URL } = require('./config');
+      const oauthUrl = `${API_URL}/auth?action=facebook-oauth&redirect=souldiary://oauth-callback`;
+      
+      oauthTimeoutRef.current = setTimeout(() => {
+        setLoading(false);
+        Alert.alert('Login Cancelled', 'OAuth flow was not completed. Please try again.');
+        oauthTimeoutRef.current = null;
+      }, 120000);
+      
+      const result = await WebBrowser.openBrowserAsync(oauthUrl);
+      
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        if (oauthTimeoutRef.current) {
+          clearTimeout(oauthTimeoutRef.current);
+          oauthTimeoutRef.current = null;
+        }
+        setLoading(false);
+      }
+    } catch (error) {
+      if (oauthTimeoutRef.current) {
+        clearTimeout(oauthTimeoutRef.current);
+        oauthTimeoutRef.current = null;
+      }
+      setLoading(false);
+      Alert.alert('Facebook Login Failed', error.message);
+    }
+  };
+
+  const handleSocialLogin = async (provider, token) => {
+    if (oauthTimeoutRef.current) {
+      clearTimeout(oauthTimeoutRef.current);
+      oauthTimeoutRef.current = null;
+    }
+    
+    setLoading(true);
+    try {
+      await authService.saveToken(token);
+      let currentUser = await authService.getCurrentUser();
+      
+      if (!currentUser.name || currentUser.name.trim() === '') {
+        const nameFromEmail = currentUser.email?.split('@')[0] || 'User';
+        currentUser.name = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+      }
+
+      onLoginSuccess(currentUser);
+    } catch (error) {
+      console.error(`❌ ${provider} login critical error:`, error);
+      Alert.alert('Login Failed', error.message || 'Could not complete login');
       setLoading(false);
     }
   };
 
-  // 🔧 XỬ LÝ EMAIL/PASSWORD AUTH
+  // Email/Password Auth
   const handleAuth = async () => {
-    // Validation
     if (!emailInput || !passwordInput) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-    
+
     if (isRegister && !fullName) {
       Alert.alert('Error', 'Please enter your name');
       return;
     }
 
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(emailInput)) {
       Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
 
-    // Password length check
     if (passwordInput.length < 6) {
       Alert.alert('Error', 'Password must be at least 6 characters');
       return;
@@ -175,182 +208,196 @@ const AuthScreen = ({ onLoginSuccess, onForgotPassword }) => {
     try {
       if (isRegister) {
         await authService.register(fullName, emailInput, passwordInput);
-        Alert.alert(
-          'Success', 
-          'Account created successfully! Please log in.',
-          [{ text: 'OK', onPress: () => {
-            setIsRegister(false);
-            setFullName('');
-            setPasswordInput('');
-          }}]
-        );
+        setRegistrationEmail(emailInput);
+        setOtpType('register');
+        setOtpModalSource('auto');
+        setShowOtpModal(true);
       } else {
         const responseData = await authService.login(emailInput, passwordInput);
         onLoginSuccess(responseData.data?.user || responseData.user);
       }
     } catch (error) {
-      Alert.alert(
-        'Authentication Failed', 
-        error.message || 'Please check your credentials and try again.'
-      );
+      Alert.alert('Authentication Failed', error.message || 'Please check your credentials');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleOtpVerification = async () => {
+    if (!registrationEmail || !registrationEmail.trim()) {
+      setOtpError('Please enter your email address');
+      return;
+    }
+
+    if (!otp || otp.trim().length !== 6) {
+      setOtpError('Please enter a valid 6-digit OTP code');
+      return;
+    }
+
+    setOtpLoading(true);
+    setOtpError('');
+    try {
+      await authService.verifyOtp(registrationEmail, otp, otpType);
+      setShowOtpModal(false);
+      setOtp('');
+
+      if (otpType === 'register') {
+        setIsRegister(false);
+        setFullName('');
+        setEmailInput('');
+        setPasswordInput('');
+        Alert.alert('Email Verified!', 'Your email has been verified successfully. You can now log in.');
+      } else if (otpType === 'forgotPassword') {
+        setEmailInput(registrationEmail);
+        Alert.alert('Email Verified!', 'A new password has been sent to your email.');
+      }
+    } catch (error) {
+      setOtpError(error.message || 'Invalid OTP. Please try again.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleForgotPassword = () => {
+    if (onForgotPasswordCallback) {
+      onForgotPasswordCallback();
+    } else {
+      setRegistrationEmail(emailInput);
+      setOtpType('forgotPassword');
+      setOtpModalSource('manual');
+      setOtp('');
+      setOtpError('');
+      setShowOtpModal(true);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!registrationEmail) {
+      Alert.alert('Email Required', 'Please enter your email address');
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+      await authService.resendOtp(registrationEmail, otpType);
+      Alert.alert('Success', 'OTP has been resent to your email.');
+    } catch (error) {
+      Alert.alert('Resend Failed', error.message);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          <ScrollView 
+          <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {/* HEADER */}
+            {/* Header */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
                 <MaterialIcons name="edit-note" size={95} color={COLORS.primary} />
               </View>
-              <Text style={styles.appName}>SoulDiary</Text>
-              <Text style={styles.title}>
+              <Text style={[styles.appName, { color: themeColors.text }]}>SoulDiary</Text>
+              <Text style={[styles.title, { color: themeColors.text }]}>
                 {isRegister ? 'Create Account' : 'Hi, My Friend!'}
               </Text>
-              <Text style={styles.subtitle}>
-                {isRegister 
-                  ? 'Sign up to start your journaling journey' 
+              <Text style={[styles.subtitle, { color: themeColors.textMuted }]}>
+                {isRegister
+                  ? 'Sign up to start your journaling journey'
                   : 'Log in to continue your story'}
               </Text>
             </View>
 
-            {/* FORM */}
+            {/* Form */}
             <View style={styles.formContainer}>
               {isRegister && (
                 <View style={styles.inputWrapper}>
-                  <Text style={styles.label}>Full Name</Text>
-                  <View style={styles.inputBox}>
-                    <MaterialIcons name="person-outline" size={20} color="#A8A29E" />
-                    <TextInput 
-                      style={styles.input}
-                      placeholder="e.g. John Doe"
-                      value={fullName}
-                      onChangeText={setFullName}
-                      autoCapitalize="words"
-                      autoCorrect={false}
-                    />
-                  </View>
+                  <FormLabel label="Full Name" themeColors={themeColors} />
+                  <FormInput
+                    icon="person-outline"
+                    placeholder="e.g. John Doe"
+                    value={fullName}
+                    onChangeText={setFullName}
+                    autoCapitalize="words"
+                    themeColors={themeColors}
+                  />
                 </View>
               )}
 
               <View style={styles.inputWrapper}>
-                <Text style={styles.label}>Email Address</Text>
-                <View style={styles.inputBox}>
-                  <MaterialIcons name="mail-outline" size={20} color="#A8A29E" />
-                  <TextInput 
-                    style={styles.input}
-                    placeholder="name@example.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect={false}
-                    value={emailInput}
-                    onChangeText={setEmailInput}
-                  />
-                </View>
+                <FormLabel label="Email Address" themeColors={themeColors} />
+                <FormInput
+                  icon="mail-outline"
+                  placeholder="name@example.com"
+                  value={emailInput}
+                  onChangeText={setEmailInput}
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  themeColors={themeColors}
+                />
               </View>
 
               <View style={styles.inputWrapper}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.inputBox}>
-                  <MaterialIcons name="lock-outline" size={20} color="#A8A29E" />
-                  <TextInput 
-                    style={styles.input}
-                    placeholder="Enter password"
-                    secureTextEntry={!showPassword}
-                    autoComplete="password"
-                    autoCorrect={false}
-                    value={passwordInput}
-                    onChangeText={setPasswordInput}
-                  />
-                  <TouchableOpacity 
-                    onPress={() => setShowPassword(!showPassword)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <MaterialIcons 
-                      name={showPassword ? "visibility" : "visibility-off"} 
-                      size={20} 
-                      color="#A8A29E" 
-                    />
-                  </TouchableOpacity>
-                </View>
+                <FormLabel label="Password" themeColors={themeColors} />
+                <FormInput
+                  icon="lock-outline"
+                  placeholder="Enter password"
+                  value={passwordInput}
+                  onChangeText={setPasswordInput}
+                  secureTextEntry
+                  showPassword={showPassword}
+                  onTogglePassword={() => setShowPassword(!showPassword)}
+                  autoComplete="password"
+                  themeColors={themeColors}
+                />
               </View>
 
-              {!isRegister && (
-                <TouchableOpacity 
-                  style={{ alignSelf: 'flex-end' }} 
-                  onPress={onForgotPassword}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.primary }}>
-                    Forgot Password?
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity 
-                style={[styles.mainButton, loading && styles.buttonDisabled]} 
+              {/* Main Button */}
+              <TouchableOpacity
+                style={[styles.mainButton, loading && styles.buttonDisabled]}
                 onPress={handleAuth}
                 disabled={loading}
                 activeOpacity={0.8}
               >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.mainButtonText}>
-                    {isRegister ? 'Sign Up' : 'Log In'}
+                <Text style={styles.mainButtonText}>
+                  {loading ? 'Loading...' : (isRegister ? 'Sign Up' : 'Log In')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Forgot Password */}
+              {!isRegister && (
+                <TouchableOpacity 
+                  style={{ marginTop: 12 }}
+                  onPress={handleForgotPassword}
+                  disabled={loading}
+                >
+                  <Text style={[styles.forgotPasswordLink, loading && { opacity: 0.5 }]}>
+                    Forgot Password?
                   </Text>
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
             </View>
 
-            {/* DIVIDER */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
-              <View style={styles.dividerLine} />
-            </View>
+            <Divider text="OR CONTINUE WITH" themeColors={themeColors} />
 
-            {/* SOCIAL BUTTONS */}
-            <View style={styles.socialRow}>
-              <TouchableOpacity 
-                style={[styles.socialBtn, (!fRequest || loading) && styles.buttonDisabled]} 
-                onPress={() => {
-                  promptFacebookAsync();
-                }}
-                disabled={!fRequest || loading}
-                activeOpacity={0.7}
-              >
-                <FontAwesome name="facebook" size={24} color="#1877F2" />
-              </TouchableOpacity>
+            <SocialButtons
+              onFacebookPress={handleFacebookLogin}
+              onGooglePress={handleGoogleLogin}
+              disabled={loading}
+              themeColors={themeColors}
+            />
 
-              <TouchableOpacity 
-                style={[styles.socialBtn, (!gRequest || loading) && styles.buttonDisabled]}
-                onPress={() => {
-                  handleGoogleLogin();
-                }}
-                disabled={!gRequest || loading}
-                activeOpacity={0.7}
-              >
-                <FontAwesome name="google" size={24} color="#DB4437" />
-              </TouchableOpacity>
-            </View>
-
-            {/* FOOTER */}
             <View style={styles.footer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => {
                   setIsRegister(!isRegister);
                   setFullName('');
@@ -358,160 +405,129 @@ const AuthScreen = ({ onLoginSuccess, onForgotPassword }) => {
                   setPasswordInput('');
                 }}
               >
-                <Text style={styles.linkText}>
-                  {isRegister 
-                    ? 'Already have an account? Log In' 
+                <Text style={[styles.linkText, { color: COLORS.primary }]}>
+                  {isRegister
+                    ? 'Already have an account? Log In'
                     : "Don't have an account? Sign Up"}
                 </Text>
               </TouchableOpacity>
+              
+              {!isRegister && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setOtpModalSource('manual');
+                    setRegistrationEmail('');
+                    setOtpType('register');
+                    setShowOtpModal(true);
+                  }}
+                  style={{ marginTop: 16 }}
+                >
+                  <Text style={[styles.linkText, { fontSize: 13, color: COLORS.primary }]}>
+                    ✉️ Verify Email with OTP
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
-
           </ScrollView>
         </KeyboardAvoidingView>
+
+        {/* OTP Modal */}
+        <Modal visible={showOtpModal} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={() => setShowOtpModal(false)}>
+                  <MaterialIcons name="close" size={24} color={themeColors.text} />
+                </TouchableOpacity>
+                <Text style={[styles.modalTitle, { color: themeColors.text }]}>Verification</Text>
+                <View style={{ width: 24 }} />
+              </View>
+              
+              <ScrollView contentContainerStyle={styles.modalScrollContent}>
+                <View style={styles.modalIconContainer}>
+                  <MaterialIcons name="mail-lock" size={60} color={COLORS.primary} />
+                </View>
+                
+                <Text style={[styles.modalSubtitle, { color: themeColors.text }]}>Enter Verification Code</Text>
+                
+                {otpModalSource === 'manual' && (
+                  <View style={[styles.inputBox, { marginVertical: 16, backgroundColor: themeColors.background, borderColor: themeColors.border }]}>
+                    <TextInput
+                      style={[styles.input, { color: themeColors.text }]}
+                      placeholder="your.email@example.com"
+                      placeholderTextColor={themeColors.textMuted}
+                      value={registrationEmail}
+                      onChangeText={setRegistrationEmail}
+                    />
+                  </View>
+                )}
+                
+                <TextInput
+                  style={[styles.otpInput, { color: themeColors.text, borderColor: themeColors.border }]}
+                  placeholder="000000"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={otp}
+                  onChangeText={setOtp}
+                />
+                
+                {otpError && <Text style={{ color: '#EF4444', textAlign: 'center', marginTop: 8 }}>{otpError}</Text>}
+                
+                <TouchableOpacity
+                  style={[styles.verifyButton, (otpLoading || otp.length !== 6) && styles.buttonDisabled]}
+                  onPress={handleOtpVerification}
+                  disabled={otpLoading || otp.length !== 6}
+                >
+                  {otpLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.verifyButtonText}>Verify</Text>}
+                </TouchableOpacity>
+                
+                <TouchableOpacity onPress={handleResendOtp} disabled={otpLoading}>
+                  <Text style={{ color: COLORS.primary, textAlign: 'center', marginTop: 16 }}>Resend OTP</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.backgroundLight 
-  },
-  scrollContent: { 
-    flexGrow: 1, 
-    padding: 24, 
-    justifyContent: 'center' 
-  },
-  header: { 
-    alignItems: 'center', 
-    marginBottom: 32 
-  },
-  iconContainer: {
-    width:200, 
-    height: 200, 
-    borderRadius: 100, 
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5
-  },
-  appName: { 
-    fontSize: 14, 
-    fontWeight: '700', 
-    color: COLORS.primary, 
-    marginBottom: 8 
-  },
-  title: { 
-    fontSize: 28, 
-    fontWeight: '800', 
-    color: COLORS.textMain, 
-    marginBottom: 8 
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#A8A29E',
-    textAlign: 'center'
-  },
-  formContainer: { 
-    gap: 16 
-  },
-  inputWrapper: { 
-    gap: 6 
-  },
-  label: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: COLORS.textMain 
-  },
-  inputBox: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#FFFFFF',
-    height: 52, 
-    borderRadius: 12, 
-    paddingHorizontal: 16, 
-    borderWidth: 1,
-    borderColor: COLORS.borderLight, 
-    gap: 12
-  },
-  input: { 
-    flex: 1, 
-    height: '100%', 
-    fontSize: 16,
-    color: COLORS.textMain
-  },
+  container: { flex: 1 },
+  scrollContent: { paddingBottom: 32 },
+  header: { alignItems: 'center', marginBottom: 32 },
+  iconContainer: { marginBottom: 16 },
+  appName: { fontSize: 24, fontWeight: '800', marginBottom: 8 },
+  title: { fontSize: 28, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
+  formContainer: { paddingHorizontal: 24, marginBottom: 20 },
+  inputWrapper: { marginBottom: 16 },
   mainButton: {
-    backgroundColor: COLORS.primary, 
-    height: 56, 
-    borderRadius: 14,
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginTop: 8,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4
-  },
-  mainButtonText: { 
-    color: '#FFFFFF', 
-    fontSize: 16, 
-    fontWeight: '800' 
-  },
-  buttonDisabled: { 
-    opacity: 0.5 
-  },
-  divider: {
-    flexDirection: 'row',
+    backgroundColor: COLORS.primary,
+    height: 54,
+    borderRadius: 12,
     alignItems: 'center',
-    marginVertical: 24,
-    gap: 12
+    justifyContent: 'center',
+    marginTop: 8
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.borderLight
-  },
-  dividerText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#A8A29E'
-  },
-  socialRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
-    gap: 20, 
-    marginBottom: 24 
-  },
-  socialBtn: {
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2
-  },
-  footer: { 
-    alignItems: 'center' 
-  },
-  linkText: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: COLORS.primary 
-  }
+  buttonDisabled: { opacity: 0.6 },
+  mainButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  forgotPasswordLink: { fontSize: 13, fontWeight: '600', color: COLORS.primary, textAlign: 'center' },
+  footer: { paddingHorizontal: 24, paddingTop: 20, alignItems: 'center' },
+  linkText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '700', flex: 1, textAlign: 'center' },
+  modalScrollContent: { paddingBottom: 24 },
+  modalIconContainer: { alignItems: 'center', marginBottom: 20 },
+  modalSubtitle: { fontSize: 16, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
+  otpInput: { borderWidth: 2, borderRadius: 12, fontSize: 24, fontWeight: '700', padding: 16, textAlign: 'center', letterSpacing: 10, marginTop: 16 },
+  verifyButton: { backgroundColor: COLORS.primary, height: 54, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  verifyButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  inputBox: { borderHorizontal: 12, borderWidth: 1, borderRadius: 12, height: 50, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center' },
+  input: { flex: 1, fontSize: 14 }
 });
 
 export default AuthScreen;

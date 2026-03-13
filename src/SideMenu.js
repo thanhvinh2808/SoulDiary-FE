@@ -12,7 +12,8 @@ import {
   Alert
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
+import { useTheme } from './context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.75;
@@ -25,7 +26,10 @@ const SideMenu = ({
   onExport,
   onLogout
 }) => {
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const menuBgColor = isDark ? 'rgba(26, 26, 26, 0.95)' : 'rgba(255, 255, 255, 0.95)'
 
   useEffect(() => {
     Animated.timing(slideAnim, {

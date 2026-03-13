@@ -14,8 +14,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { COLORS, getThemeColors } from './theme';
 import { diaryService } from './services/diaryService';
+import { useTheme } from './context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 const MOOD_COLORS = {
@@ -39,7 +40,8 @@ const MOOD_ICONS = {
 };
 
 const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...props }) => {
-  const isDark = false;
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   // Handle diaryId from both route.params and direct props
   const [diaryId, setDiaryId] = useState(props.route?.params?.diaryId || passedDiaryId);
@@ -366,11 +368,11 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
   };
 
   const themeStyles = {
-    container: { backgroundColor: COLORS.backgroundLight },
-    textPrimary: { color: COLORS.textMain },
-    textSecondary: { color: COLORS.textGray },
-    cardBg: { backgroundColor: '#FFFFFF' },
-    navBg: { backgroundColor: 'rgba(255, 255, 255, 0.95)' },
+    container: { backgroundColor: themeColors.background },
+    textPrimary: { color: themeColors.text },
+    textSecondary: { color: themeColors.textSecondary },
+    cardBg: { backgroundColor: themeColors.surface },
+    navBg: { backgroundColor: isDark ? 'rgba(26, 26, 26, 0.95)' : 'rgba(255, 255, 255, 0.95)' },
   };
 
   const renderDay = (dayObj, index) => {
@@ -385,12 +387,13 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
         key={index}
         style={[
           styles.dayCell,
-          isSelected && styles.dayCellSelected
+          isSelected && [styles.dayCellSelected, { backgroundColor: COLORS.primary + '20' }]
         ]}
         onPress={() => handleDayPress(dayObj)}
       >
         <Text style={[
           styles.dayText,
+          { color: themeColors.text },
           isSelected && styles.dayTextSelected
         ]}>
           {dayObj.day}
@@ -404,13 +407,13 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
 
   return (
     <View style={[styles.container, themeStyles.container]}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
         
         {/* Enhanced Header */}
-        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
           <TouchableOpacity 
-            style={styles.navIconButton} 
+            style={[styles.navIconButton, { backgroundColor: themeColors.surface }]} 
             onPress={handlePreviousMonth}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
           >
@@ -419,15 +422,15 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
 
           {/* Month/Year Selector */}
           <TouchableOpacity 
-            style={styles.monthYearButton}
+            style={[styles.monthYearButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
             onPress={() => setShowMonthPicker(true)}
             activeOpacity={0.7}
           >
             <View>
-              <Text style={styles.monthText}>
+              <Text style={[styles.monthText, { color: COLORS.primary }]}>
                 {monthNames[currentDate.getMonth()]}
               </Text>
-              <Text style={styles.yearText}>
+              <Text style={[styles.yearText, { color: themeColors.textMuted }]}>
                 {currentDate.getFullYear()}
               </Text>
             </View>
@@ -435,7 +438,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={styles.navIconButton} 
+            style={[styles.navIconButton, { backgroundColor: themeColors.surface }]} 
             onPress={handleNextMonth}
             hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
           >
@@ -463,12 +466,12 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
             onPress={() => setShowMonthPicker(false)}
             activeOpacity={1}
           >
-            <View style={styles.monthPickerModal}>
-              <Text style={styles.modalTitle}>Select Month & Year</Text>
+            <View style={[styles.monthPickerModal, { backgroundColor: themeColors.surface }]}>
+              <Text style={[styles.modalTitle, { color: themeColors.text }]}>Select Month & Year</Text>
               
               {/* Year Selector */}
               <View style={styles.pickerSection}>
-                <Text style={styles.pickerLabel}>Year</Text>
+                <Text style={[styles.pickerLabel, { color: COLORS.primary }]}>Year</Text>
                 <ScrollView 
                   horizontal 
                   showsHorizontalScrollIndicator={false}
@@ -479,6 +482,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
                       key={year}
                       style={[
                         styles.yearChip,
+                        { backgroundColor: themeColors.background, borderColor: themeColors.border },
                         currentDate.getFullYear() === year && styles.yearChipActive
                       ]}
                       onPress={() => {
@@ -488,6 +492,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
                     >
                       <Text style={[
                         styles.yearChipText,
+                        { color: themeColors.text },
                         currentDate.getFullYear() === year && styles.yearChipTextActive
                       ]}>
                         {year}
@@ -499,13 +504,14 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
 
               {/* Month Selector */}
               <View style={styles.pickerSection}>
-                <Text style={styles.pickerLabel}>Month</Text>
+                <Text style={[styles.pickerLabel, { color: COLORS.primary }]}>Month</Text>
                 <View style={styles.monthGrid}>
                   {monthNames.map((month, index) => (
                     <TouchableOpacity
                       key={month}
                       style={[
                         styles.monthChip,
+                        { backgroundColor: themeColors.background, borderColor: themeColors.border },
                         currentDate.getMonth() === index && styles.monthChipActive
                       ]}
                       onPress={() => {
@@ -516,6 +522,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
                     >
                       <Text style={[
                         styles.monthChipText,
+                        { color: themeColors.text },
                         currentDate.getMonth() === index && styles.monthChipTextActive
                       ]}>
                         {month.substring(0, 3)}
@@ -548,7 +555,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
               <View style={styles.weekRow}>
                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
                   <View key={i} style={styles.dayHeaderCell}>
-                    <Text style={styles.dayHeaderText}>{day}</Text>
+                    <Text style={[styles.dayHeaderText, { color: themeColors.textMuted }]}>{day}</Text>
                   </View>
                 ))}
               </View>
@@ -563,7 +570,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
 
             {/* Selected Date Header */}
             <View style={styles.dateHeader}>
-              <Text style={styles.dateTitle}>
+              <Text style={[styles.dateTitle, { color: themeColors.text }]}>
                 {monthNames[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()}
               </Text>
             </View>
@@ -571,11 +578,11 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
             {/* Entry Summary Card */}
             {selectedEntryData ? (
               <View style={styles.entrySummaryContainer}>
-                <View style={styles.entryCard}>
+                <View style={[styles.entryCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
                   {/* Entry counter if multiple entries */}
                   {selectedDayEntries.length > 1 && (
-                    <View style={styles.entryCounter}>
-                      <Text style={styles.entryCounterText}>
+                    <View style={[styles.entryCounter, { borderBottomColor: themeColors.border }]}>
+                      <Text style={[styles.entryCounterText, { color: themeColors.textMuted }]}>
                         Entry {entryIndex + 1} of {selectedDayEntries.length}
                       </Text>
                     </View>
@@ -593,8 +600,8 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.moodLabel}>MOOD: {selectedEntryData.mood?.toUpperCase() || 'NEUTRAL'}</Text>
-                      <Text style={styles.timeLabel}>
+                      <Text style={[styles.moodLabel, { color: themeColors.textSecondary }]}>MOOD: {selectedEntryData.mood?.toUpperCase() || 'NEUTRAL'}</Text>
+                      <Text style={[styles.timeLabel, { color: themeColors.textMuted }]}>
                         {new Date(selectedEntryData.createdAt).toLocaleString('en-US', {
                           month: 'short',
                           day: 'numeric',
@@ -605,14 +612,14 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
                     </View>
                   </View>
                   
-                  <Text style={styles.entryTitle}>{selectedEntryData.title || 'Untitled'}</Text>
-                  <Text style={styles.entrySnippet} numberOfLines={3}>
+                  <Text style={[styles.entryTitle, { color: themeColors.text }]}>{selectedEntryData.title || 'Untitled'}</Text>
+                  <Text style={[styles.entrySnippet, { color: themeColors.textSecondary }]} numberOfLines={3}>
                     {selectedEntryData.content || 'No content'}
                   </Text>
 
                   <View style={styles.entryFooter}>
                     <TouchableOpacity 
-                      style={[styles.navButton, selectedDayEntries.length <= 1 || entryIndex === 0 ? { opacity: 0.3 } : {}]}
+                      style={[styles.navButton, { borderColor: COLORS.primary }, selectedDayEntries.length <= 1 || entryIndex === 0 ? { opacity: 0.3 } : {}]}
                       onPress={handlePreviousEntry}
                       disabled={entryIndex === 0}
                     >
@@ -624,7 +631,7 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
                     </TouchableOpacity>
                     
                     <TouchableOpacity 
-                      style={[styles.navButton, selectedDayEntries.length <= 1 || entryIndex === selectedDayEntries.length - 1 ? { opacity: 0.3 } : {}]}
+                      style={[styles.navButton, { borderColor: COLORS.primary }, selectedDayEntries.length <= 1 || entryIndex === selectedDayEntries.length - 1 ? { opacity: 0.3 } : {}]}
                       onPress={handleNextEntry}
                       disabled={entryIndex === selectedDayEntries.length - 1}
                     >
@@ -635,12 +642,12 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
               </View>
             ) : (
               <View style={styles.entrySummaryContainer}>
-                <View style={[styles.entryCard, { alignItems: 'center', paddingVertical: 40 }]}>
-                  <MaterialIcons name="calendar-today" size={40} color="#D1D5DB" />
-                  <Text style={[styles.entryTitle, { marginTop: 16, color: '#9CA3AF' }]}>
+                <View style={[styles.entryCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border, alignItems: 'center', paddingVertical: 40 }]}>
+                  <MaterialIcons name="calendar-today" size={40} color={themeColors.textMuted} />
+                  <Text style={[styles.entryTitle, { marginTop: 16, color: themeColors.textMuted }]}>
                     No entry found
                   </Text>
-                  <Text style={[styles.entrySnippet, { color: '#9CA3AF', marginBottom: 0 }]}>
+                  <Text style={[styles.entrySnippet, { color: themeColors.textMuted, marginBottom: 0 }]}>
                     Select a date with an entry or create a new one
                   </Text>
                 </View>
@@ -661,22 +668,22 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
         </TouchableOpacity>
 
         {/* Bottom Navigation */}
-        <View style={[styles.bottomNav, themeStyles.navBg]}>
+        <View style={[styles.bottomNav, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
           <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Home')}>
-            <MaterialIcons name="home" size={28} color="#A8A29E" />
-            <Text style={styles.navLabel}>Home</Text>
+            <MaterialIcons name="home" size={28} color={themeColors.textMuted} />
+            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Home</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History', { diaryId })}>
-            <MaterialIcons name="menu-book" size={28} color="#A8A29E" />
-            <Text style={styles.navLabel}>Diary</Text>
+            <MaterialIcons name="menu-book" size={28} color={themeColors.textMuted} />
+            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Diary</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar')}>
             <MaterialIcons name="calendar-today" size={28} color={COLORS.primary} />
             <Text style={[styles.navLabel, { color: COLORS.primary }]}>Calendar</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics', { diaryId })}>
-            <MaterialIcons name="analytics" size={28} color="#A8A29E" />
-            <Text style={styles.navLabel}>Insights</Text>
+            <MaterialIcons name="analytics" size={28} color={themeColors.textMuted} />
+            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Insights</Text>
           </TouchableOpacity>
         </View>
 
@@ -695,16 +702,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: 'rgba(253, 251, 247, 0.98)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E7E5E4',
     gap: 8,
   },
   navIconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F5F3F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -713,12 +717,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFF',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#E7E5E4',
     gap: 8,
   },
   monthText: {
@@ -731,7 +733,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     fontFamily: 'Manrope_600SemiBold',
-    color: '#A8A29E',
     marginTop: 2,
   },
   todayButton: {
@@ -756,7 +757,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   monthPickerModal: {
-    backgroundColor: '#FFF',
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 24,
@@ -768,7 +768,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#111811',
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -791,10 +790,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#F5F3F0',
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#E7E5E4',
     minWidth: 60,
     alignItems: 'center',
   },
@@ -806,7 +803,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     fontFamily: 'Manrope_600SemiBold',
-    color: '#111811',
   },
   yearChipTextActive: {
     color: '#FFF',
@@ -820,9 +816,7 @@ const styles = StyleSheet.create({
     width: '23%',
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#F5F3F0',
     borderWidth: 1,
-    borderColor: '#E7E5E4',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -834,7 +828,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     fontFamily: 'Manrope_600SemiBold',
-    color: '#111811',
   },
   monthChipTextActive: {
     color: '#FFF',
@@ -873,7 +866,6 @@ const styles = StyleSheet.create({
   dayHeaderText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9CA3AF', // Gray-400
     textTransform: 'uppercase',
     fontFamily: 'Manrope_700Bold',
   },
@@ -895,7 +887,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'Manrope_500Medium',
-    color: '#111811',
   },
   dayTextSelected: {
     fontWeight: '700',
@@ -916,17 +907,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#111811',
   },
   entrySummaryContainer: {
     paddingHorizontal: 16,
   },
   entryCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -935,14 +923,11 @@ const styles = StyleSheet.create({
   },
   entryCounter: {
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
     marginBottom: 12,
   },
   entryCounterText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#9CA3AF',
     fontFamily: 'Manrope_600SemiBold',
   },
   entryHeader: {
@@ -961,7 +946,6 @@ const styles = StyleSheet.create({
   moodLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#6B7280', // Gray-500
     textTransform: 'uppercase',
     letterSpacing: 1,
     fontFamily: 'Manrope_700Bold',
@@ -969,20 +953,17 @@ const styles = StyleSheet.create({
   timeLabel: {
     fontSize: 12,
     fontWeight: '400',
-    color: COLORS.textGray,
     fontFamily: 'Manrope_400Regular',
   },
   entryTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111811',
     fontFamily: 'Manrope_700Bold',
     marginBottom: 8,
   },
   entrySnippet: {
     fontSize: 14,
     fontFamily: 'Manrope_400Regular',
-    color: '#4B5563', // Gray-600
     lineHeight: 24,
     marginBottom: 16,
   },
@@ -1055,7 +1036,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingBottom: Platform.OS === 'ios' ? 32 : 12,
     borderTopWidth: 1,
-    borderTopColor: '#E7E5E4',
   },
   navItem: {
     flex: 1,
@@ -1066,7 +1046,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#A8A29E',
   },
 });
 

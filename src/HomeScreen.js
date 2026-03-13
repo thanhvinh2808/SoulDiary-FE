@@ -1,39 +1,83 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ScrollView,
-  Dimensions,
-  Platform,
-  useColorScheme,
-  ActivityIndicator,
-  Alert
+  Alert,
+  SafeAreaView,
+  TouchableOpacity,
+  Text,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS } from './theme';
+import { useTheme } from './context/ThemeContext';
+import { getThemeColors, COLORS } from './theme';
 import { diaryService } from './services/diaryService';
+import { authService } from './services/authService';
+import { getDailyQuote, calculateStreak } from './utils/helpers';
+import { PAGINATION } from './utils/constants';
+
+// Components
+import {
+  HomeHeader,
+  DailyQuoteCard,
+  StreakCard,
+  EntryCard,
+  PaginationControls,
+  BottomNav,
+} from './components/Home';
+import { LoadingSpinner, EmptyState } from './components/Shared';
+
+// Modals
+import SideMenu from './SideMenu';
+import SearchScreen from './SearchScreen';
+import SettingsScreen from './SettingsScreen';
+import ExportScreen from './ExportScreen';
 
 const HomeScreen = ({ onNavigate }) => {
-  const isDark = false; // Luôn dùng Light Mode
-  const insets = useSafeAreaInsets();
+  const { isDark } = useTheme();
+  const themeColors = getThemeColors(isDark);
+
+  // State
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentDiaryId, setCurrentDiaryId] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [activeMenuScreen, setActiveMenuScreen] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
+  const dailyQuote = getDailyQuote();
+  const streakValue = calculateStreak(entries);
+  const totalPages = Math.ceil(entries.length / PAGINATION.ENTRIES_PER_PAGE);
+  const startIndex = (currentPage - 1) * PAGINATION.ENTRIES_PER_PAGE;
+  const paginatedEntries = entries.slice(startIndex, startIndex + PAGINATION.ENTRIES_PER_PAGE);
+
+  // Fetch diary data
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // Lấy trực tiếp danh sách bài viết (Journals)
-      const data = await diaryService.getEntries({ limit: 10 }); // Lấy 10 bài mới nhất
-      
-      if (Array.isArray(data)) {
-        setEntries(data);
+      let diaries = await diaryService.getDiaries();
+
+      if (!diaries || diaries.length === 0) {
+        try {
+          const newDiary = await diaryService.createDiary(
+            "My Journal",
+            "Your journey begins here",
+            "Personal diary created automatically"
+          );
+          diaries = [newDiary];
+        } catch (createError) {
+          console.error("Failed to create default diary", createError);
+        }
+      }
+
+      if (diaries && Array.isArray(diaries) && diaries.length > 0) {
+        const firstDiary = diaries[0];
+        setCurrentDiaryId(firstDiary.id || firstDiary._id);
+
+        const diaryEntries = await diaryService.getEntries(firstDiary.id || firstDiary._id);
+        const entriesArray = Array.isArray(diaryEntries) ? diaryEntries : [];
+        setEntries(entriesArray);
       } else {
         setEntries([]);
       }
@@ -49,286 +93,190 @@ const HomeScreen = ({ onNavigate }) => {
     fetchData();
   }, [fetchData]);
 
-  // Format Date: "2023-10-25..." -> Month: "OCT", Date: "25"
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-    return {
-      month: months[date.getMonth()],
-      day: date.getDate().toString()
-    };
+  // Handlers
+  const handleSelectEntry = (entry) => {
+    setActiveMenuScreen(null);
+    setTimeout(() => {
+      if (onNavigate) {
+        onNavigate('NewEntry', {
+          entryId: entry.id || entry._id,
+          diaryId: currentDiaryId,
+          returnTo: 'Home'
+        });
+      }
+    }, 300);
   };
 
-  const getMoodIcon = (mood) => {
-    switch (mood?.toLowerCase()) {
-      case 'happy': return 'sentiment-very-satisfied';
-      case 'sad': return 'sentiment-very-dissatisfied';
-      case 'neutral': return 'sentiment-neutral';
-      case 'angry': return 'sentiment-dissatisfied';
-      case 'anxious': return 'help-outline';
-      default: return 'sentiment-satisfied';
-    }
-  };
-
-  const getMoodColor = (mood) => {
-    switch (mood?.toLowerCase()) {
-      case 'happy': return COLORS.primary;
-      case 'sad': return COLORS.textGray;
-      case 'angry': return '#EF4444';
-      case 'anxious': return '#F59E0B';
-      default: return COLORS.primary;
-    }
-  };
-
-  const themeStyles = {
-    container: {
-      backgroundColor: COLORS.backgroundLight,
-    },
-    textPrimary: {
-      color: COLORS.textMain,
-    },
-    textQuote: {
-      color: COLORS.textMain,
-    },
-    textSecondary: {
-      color: COLORS.textGray,
-    },
-    cardBg: {
-      backgroundColor: '#FFFFFF',
-    },
-    entryBg: {
-      backgroundColor: COLORS.beigeAccent,
-    },
-    border: {
-      borderColor: COLORS.borderLight,
-    },
-    bottomNavBg: {
-       backgroundColor: 'rgba(255, 255, 255, 0.95)',
-       borderTopColor: COLORS.borderLight,
-    }
-  };
-
-  const renderEntryItem = (item) => {
-    // Backend trả về field: entryDate
-    const { month, day } = formatDate(item.entryDate || item.createdAt);
-    const moodIcon = getMoodIcon(item.mood);
-    const moodColor = getMoodColor(item.mood);
-
-    return (
-      <TouchableOpacity 
-        key={item.id || item._id} 
-        style={[styles.entryCard, themeStyles.entryBg, { borderColor: 'transparent' }]}
-        onPress={() => onNavigate('NewEntry', { entryId: item.id || item._id })}
-      >
-        <View style={[styles.dateBox, isDark ? { backgroundColor: COLORS.backgroundDark } : { backgroundColor: '#FFFFFF' }]}>
-          <Text style={styles.dateMonth}>{month}</Text>
-          <Text style={[styles.dateDay, isDark && { color: '#FFF' }]}>{day}</Text>
-        </View>
-        <View style={styles.entryContent}>
-          <Text style={[styles.entryTitle, themeStyles.textPrimary]} numberOfLines={1}>{item.title}</Text>
-          <Text style={[styles.entrySubtitle, { color: COLORS.textGray }]} numberOfLines={1}>
-            {item.content || 'No content preview'}
-          </Text>
-        </View>
-        <MaterialIcons name={moodIcon} size={28} color={moodColor} />
-      </TouchableOpacity>
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Logout',
+          onPress: async () => {
+            try {
+              await authService.removeTokens();
+              onNavigate('Auth');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to logout');
+            }
+          },
+          style: 'destructive'
+        }
+      ]
     );
   };
 
+  // Render conditional screens
+  if (activeMenuScreen === 'search') {
+    return (
+      <SearchScreen
+        onClose={() => setActiveMenuScreen(null)}
+        diaryId={currentDiaryId}
+        onSelectEntry={handleSelectEntry}
+      />
+    );
+  }
+
+  if (activeMenuScreen === 'settings') {
+    return <SettingsScreen onClose={() => setActiveMenuScreen(null)} />;
+  }
+
+  if (activeMenuScreen === 'export') {
+    return <ExportScreen onClose={() => setActiveMenuScreen(null)} />;
+  }
+
+  // Main render
   return (
-    <View style={[styles.container, themeStyles.container]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
-        
-        {/* Top App Bar */}
-        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-            <TouchableOpacity style={styles.iconButton}>
-                 <MaterialIcons name="menu" size={28} color={isDark ? '#FFF' : '#111811'} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, themeStyles.textPrimary]}>SoulDiary</Text>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity style={styles.iconButton} onPress={fetchData}>
-                   <MaterialIcons name="refresh" size={28} color={isDark ? '#FFF' : '#111811'} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton} onPress={() => onNavigate('Profile')}>
-                   <MaterialIcons name="person" size={28} color={isDark ? '#FFF' : '#111811'} />
-              </TouchableOpacity>
-            </View>
-        </View>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar barStyle={themeColors.statusBarStyle} />
+      <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+        {/* Header */}
+        <HomeHeader
+          onMenuPress={() => setMenuOpen(true)}
+          onRefresh={fetchData}
+          onProfilePress={() => onNavigate('Profile')}
+          themeColors={themeColors}
+        />
 
-        <ScrollView 
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
+        {/* Content */}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-            {/* Daily Inspiration */}
-            <View style={styles.inspirationContainer}>
-                <Text style={[styles.quoteText, themeStyles.textQuote]}>
-                    "Small steps lead to big changes."
-                </Text>
-                <Text style={styles.quoteLabel}>Daily Inspiration</Text>
-            </View>
+          {/* Daily Quote */}
+          <DailyQuoteCard quote={dailyQuote} themeColors={themeColors} />
 
-            {/* Streak Card */}
-            <View style={styles.sectionPadding}>
-                <View style={[styles.streakCard, themeStyles.cardBg, themeStyles.border]}>
-                    <View style={styles.streakInfo}>
-                        <Text style={styles.streakLabel}>CURRENT STREAK</Text>
-                        <Text style={[styles.streakValue, themeStyles.textPrimary]}>5 Day Streak</Text>
-                        <Text style={[styles.streakSub, themeStyles.textSecondary]}>You're doing great! Keep it up.</Text>
-                    </View>
-                    <View style={styles.streakIconContainer}>
-                         <MaterialIcons name="local-fire-department" size={40} color={COLORS.primary} />
-                    </View>
-                </View>
-            </View>
+          {/* Streak Card */}
+          <StreakCard streak={streakValue} themeColors={themeColors} />
 
-            {/* Write Button */}
-            <View style={styles.actionContainer}>
-                <TouchableOpacity 
-                  style={styles.writeButton} 
-                  onPress={() => onNavigate('NewEntry')}
-                >
-                    <MaterialIcons name="edit-note" size={24} color="#111811" />
-                    <Text style={styles.writeButtonText}>Write Today's Story</Text>
-                </TouchableOpacity>
-            </View>
+          {/* Write Button */}
+          <View style={styles.actionContainer}>
+            <TouchableOpacity
+              style={[styles.writeButton, (loading || !currentDiaryId) && { opacity: 0.5 }]}
+              onPress={() => onNavigate('NewEntry', { diaryId: currentDiaryId, returnTo: 'Home' })}
+              disabled={loading || !currentDiaryId}
+            >
+              <MaterialIcons name="edit-note" size={24} color="#111811" />
+              <Text style={styles.writeButtonText}>
+                {loading ? 'Loading Diary...' : "Write Today's Story"}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-            {/* Recent Entries Header */}
-            <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, themeStyles.textPrimary]}>Recent Entries</Text>
-                <TouchableOpacity onPress={() => onNavigate('History')}>
-                    <Text style={styles.viewAllText}>VIEW ALL</Text>
-                </TouchableOpacity>
-            </View>
+          {/* Recent Entries */}
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Recent Entries</Text>
+            <TouchableOpacity
+              onPress={() => onNavigate('History', { diaryId: currentDiaryId })}
+              disabled={!currentDiaryId}
+            >
+              <Text style={[styles.viewAllText, !currentDiaryId && { opacity: 0.5 }]}>
+                VIEW ALL
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-            {/* Entries List */}
-            <View style={styles.entriesList}>
-                {loading ? (
-                  <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />
-                ) : (Array.isArray(entries) && entries.length > 0) ? (
-                  entries.map(renderEntryItem)
-                ) : (
-                  <Text style={{ textAlign: 'center', color: COLORS.textGray, marginTop: 20 }}>
-                    No entries yet. Start writing!
-                  </Text>
-                )}
-            </View>
+          {/* Entries List */}
+          <View style={styles.entriesList}>
+            {loading ? (
+              <LoadingSpinner />
+            ) : paginatedEntries.length > 0 ? (
+              paginatedEntries.map((entry) => (
+                <EntryCard
+                  key={entry.id || entry._id}
+                  entry={entry}
+                  onPress={() => handleSelectEntry(entry)}
+                  themeColors={themeColors}
+                />
+              ))
+            ) : (
+              <EmptyState
+                icon="note"
+                title="No Entries Yet"
+                message="Start writing your first entry!"
+              />
+            )}
+          </View>
 
-            {/* Padding for Bottom Nav */}
-            <View style={{ height: 100 }} />
+          {/* Pagination */}
+          {!loading && entries.length > PAGINATION.ENTRIES_PER_PAGE && (
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={totalPages}
+              startIndex={startIndex}
+              totalItems={entries.length}
+              itemsPerPage={PAGINATION.ENTRIES_PER_PAGE}
+              onPreviousPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+              onNextPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+              themeColors={themeColors}
+            />
+          )}
+
+          {/* Padding for Bottom Nav */}
+          <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Bottom Navigation Bar */}
-        <View style={[styles.bottomNav, themeStyles.bottomNavBg]}>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Home')}>
-                  <MaterialIcons name="home" size={28} color={COLORS.primary} />
-                  <Text style={[styles.navLabel, { color: COLORS.primary }]}>Home</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History')}>
-                  <MaterialIcons name="menu-book" size={28} color="#A8A29E" />
-                  <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Diary</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar')}>
-                  <MaterialIcons name="calendar-today" size={28} color="#A8A29E" />
-                  <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Calendar</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics')}>
-                  <MaterialIcons name="analytics" size={28} color="#A8A29E" />
-                  <Text style={[styles.navLabel, { color: "#A8A29E" }]}>Insights</Text>
-             </TouchableOpacity>
-        </View>
-
+        {/* Bottom Navigation */}
+        <BottomNav
+          activeScreen="Home"
+          onNavigate={onNavigate}
+          themeColors={themeColors}
+          diaryId={currentDiaryId}
+        />
       </SafeAreaView>
+
+      {/* Side Menu */}
+      <SideMenu
+        isOpen={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onSearch={() => {
+          setMenuOpen(false);
+          setActiveMenuScreen('search');
+        }}
+        onSettings={() => {
+          setMenuOpen(false);
+          setActiveMenuScreen('settings');
+        }}
+        onExport={() => {
+          setMenuOpen(false);
+          setActiveMenuScreen('export');
+        }}
+        onLogout={handleLogout}
+      />
     </View>
   );
 };
 
+// Minimal styles - all component styling is in component files
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-  },
-  iconButton: {
-    padding: 8,
-  },
   scrollContent: {
     paddingBottom: 24,
-  },
-  inspirationContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    alignItems: 'center',
-  },
-  quoteText: {
-    fontSize: 26,
-    fontFamily: 'Lora_400Regular_Italic',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  quoteLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textGray,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    fontFamily: 'Manrope_600SemiBold',
-  },
-  sectionPadding: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  streakCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  streakInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  streakLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textGray,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontFamily: 'Manrope_700Bold',
-  },
-  streakValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    fontFamily: 'Manrope_800ExtraBold',
-  },
-  streakSub: {
-    fontSize: 14,
-    fontFamily: 'Manrope_400Regular',
-  },
-  streakIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(25, 230, 25, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   actionContainer: {
     paddingHorizontal: 16,
@@ -379,75 +327,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
   },
-  entryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 16,
-  },
-  dateBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  dateMonth: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textGray,
-    fontFamily: 'Manrope_700Bold',
-  },
-  dateDay: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111811',
-    fontFamily: 'Manrope_800ExtraBold',
-    lineHeight: 18,
-  },
-  entryContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  entryTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    marginBottom: 4,
-  },
-  entrySubtitle: {
-    fontSize: 12,
-    fontFamily: 'Manrope_400Regular',
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 12,
-    borderTopWidth: 1,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    marginTop: 0,
-  }
 });
 
 export default HomeScreen;
