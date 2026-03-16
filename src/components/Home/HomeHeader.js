@@ -44,9 +44,7 @@ export const HomeHeader = ({
       </View>
       
       <View style={{ flexDirection: 'row', gap: 12 }}>
-        <TouchableOpacity style={styles.iconButton} onPress={onRefresh}>
-          <MaterialIcons name="refresh" size={28} color={textColor} />
-        </TouchableOpacity>
+
         <TouchableOpacity style={styles.iconButton} onPress={onProfilePress}>
           <MaterialIcons name="person" size={28} color={textColor} />
         </TouchableOpacity>

@@ -45,11 +45,9 @@ export const PaginationControls = ({
 
       <View style={styles.pageIndicator}>
         <Text style={[styles.pageIndicatorText, { color: textColor }]}>
-          Page {currentPage} of {totalPages}
+          {currentPage} - {totalPages}
         </Text>
-        <Text style={[styles.pageCountText, { color: textSecondaryColor }]}>
-          ({startIndex + 1}-{Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems})
-        </Text>
+        
       </View>
 
       <TouchableOpacity
