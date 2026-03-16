@@ -1,29 +1,31 @@
 import { api } from './api';
 
-// Helper để giải nén dữ liệu từ response
 const unwrapData = (response) => {
-  // Backend trả về: { status: "success", data: { journals: [...] } } hoặc { data: { journal: ... } }
   if (response && response.data) {
-    return response.data.journals || response.data.journal || response.data;
+    if (response.data.journals) return response.data.journals;
+    if (response.data.journal) return response.data.journal;
+    return response.data;
   }
   return response;
 };
 
 export const diaryService = {
-  // --- JOURNALS (Tương đương Bài viết/Entries) ---
-
-  // Lấy danh sách bài viết (Journals)
-  // Hỗ trợ params filter: page, limit, mood, tag, from, to, q
+  // Lấy danh sách bài viết
   async getEntries(params = {}) {
-    // Chuyển params object thành query string
-    const query = new URLSearchParams(params).toString();
-    const endpoint = query ? `/journals?${query}` : '/journals';
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null) {
+        queryParams.append(key, params[key]);
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const endpoint = queryString ? `/journals?${queryString}` : '/journals';
     
     const res = await api(endpoint);
     return unwrapData(res);
   },
 
-  // Tạo bài viết mới (Create Journal)
   async createEntry(title, content, mood = 'neutral', date = new Date(), tags = []) {
     const res = await api('/journals', {
       method: 'POST',
@@ -31,22 +33,19 @@ export const diaryService = {
         title, 
         content, 
         mood, 
-        entryDate: date.toISOString(), // Backend dùng entryDate
+        entryDate: date instanceof Date ? date.toISOString() : date, 
         tags 
       }),
     });
     return unwrapData(res);
   },
 
-  // Lấy chi tiết 1 bài viết
   async getEntryById(id) {
     const res = await api(`/journals/${id}`);
     return unwrapData(res);
   },
 
-  // Cập nhật bài viết
   async updateEntry(id, data) {
-    // data có thể chứa: title, content, mood, tags, entryDate
     const res = await api(`/journals/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -54,12 +53,29 @@ export const diaryService = {
     return unwrapData(res);
   },
 
-  // Xóa bài viết (Soft delete)
+  // Chuyển bài viết vào thùng rác (Soft delete)
   async deleteEntry(id) {
     const res = await api(`/journals/${id}`, {
       method: 'DELETE',
     });
-    // DELETE thường trả về 204 No Content -> res có thể null hoặc empty
     return res;
+  },
+
+  // Xóa vĩnh viễn khỏi DB (Hard delete) - Giả định backend dùng DELETE /permanent hoặc query param
+  async permanentDeleteEntry(id) {
+    // Tùy theo backend, ta có thể dùng param permanent=true
+    const res = await api(`/journals/${id}?permanent=true`, {
+      method: 'DELETE',
+    });
+    return res;
+  },
+
+  // Khôi phục bài viết
+  async restoreEntry(id) {
+    const res = await api(`/journals/${id}/restore`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isDeleted: false }),
+    });
+    return unwrapData(res);
   }
 };

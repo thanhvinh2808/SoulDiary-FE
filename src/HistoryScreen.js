@@ -1,160 +1,103 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  StatusBar,
-  TextInput,
-  SectionList,
-  Alert,
-  SafeAreaView,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, TextInput, SectionList, Alert, SafeAreaView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from './context/ThemeContext';
-import { getThemeColors, COLORS } from './theme';
+import { getThemeColors, COLORS, FONTS } from './theme';
 import { diaryService } from './services/diaryService';
-
-// Components
 import { HistoryEntryItem } from './components/History';
 import { LoadingSpinner, EmptyState } from './components/Shared';
+import { BottomNav } from './components/Home';
 
-const HistoryScreen = ({ onNavigate, params }) => {
+const HistoryScreen = ({ onNavigate }) => {
   const { isDark } = useTheme();
   const themeColors = getThemeColors(isDark);
-  const insets = useSafeAreaInsets();
-  const [diaryId, setDiaryId] = useState(params?.diaryId);
-
-  // State
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [groupedSections, setGroupedSections] = useState([]);
   const [showDeleted, setShowDeleted] = useState(false);
 
-  // Fetch entries from API
+  // 1. GỌI API (Phân tách rõ includeDeleted)
   const fetchEntries = useCallback(async () => {
     try {
       setLoading(true);
-      const diaryEntries = await diaryService.getEntries(diaryId, showDeleted);
-      const entriesArray = Array.isArray(diaryEntries) ? diaryEntries : [];
-      setEntries(entriesArray);
+      const res = await diaryService.getEntries({ 
+        includeDeleted: showDeleted ? 'true' : 'false' 
+      });
+      setEntries(Array.isArray(res) ? res : []);
     } catch (error) {
-      console.error('Failed to fetch entries:', error);
-      Alert.alert('Error', 'Failed to load entries');
+      console.error('Fetch Error:', error);
     } finally {
       setLoading(false);
     }
-  }, [diaryId, showDeleted]);
+  }, [showDeleted]);
 
   useEffect(() => {
     fetchEntries();
   }, [fetchEntries]);
 
-  // Group entries by month
+  // 2. NHÓM DỮ LIỆU & TÌM KIẾM
   useEffect(() => {
     const grouped = {};
-    const entriesToProcess = showDeleted 
-      ? entries.filter(e => e.isDeleted || e.deleted)
-      : entries.filter(e => !e.isDeleted && !e.deleted);
-
-    entriesToProcess.forEach((entry) => {
-      const dateStr = entry.entryDate || entry.createdAt || entry.date;
-      if (dateStr) {
-        const date = new Date(dateStr);
-        const monthKey = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-
-        if (!grouped[monthKey]) {
-          grouped[monthKey] = [];
-        }
-        grouped[monthKey].push(entry);
-      }
+    const searchLower = searchText.toLowerCase();
+    
+    entries.filter(e => {
+      if (!searchLower) return true;
+      return e.title?.toLowerCase().includes(searchLower) || e.content?.toLowerCase().includes(searchLower);
+    }).forEach(entry => {
+      const date = new Date(entry.date || entry.createdAt);
+      const monthKey = date.toLocaleDateString('vi-VN', { year: 'numeric', month: 'long' });
+      if (!grouped[monthKey]) grouped[monthKey] = [];
+      grouped[monthKey].push(entry);
     });
 
-    const sections = Object.keys(grouped)
-      .sort((a, b) => new Date(b) - new Date(a))
-      .map((month) => ({
-        title: month,
-        data: grouped[month].filter((entry) => {
-          const searchLower = searchText.toLowerCase();
-          return (
-            (entry.title?.toLowerCase().includes(searchLower) || false) ||
-            (entry.content?.toLowerCase().includes(searchLower) || false)
-          );
-        }),
-      }))
-      .filter((section) => section.data.length > 0);
-
+    const sections = Object.keys(grouped).map(month => ({ title: month, data: grouped[month] }));
     setGroupedSections(sections);
-  }, [entries, searchText, showDeleted]);
+  }, [entries, searchText]);
 
-  const handleSelectEntry = (entry) => {
-    if (onNavigate) {
-      onNavigate('NewEntry', {
-        entryId: entry.id || entry._id,
-        diaryId: diaryId,
-        returnTo: 'History',
-      });
-    }
+  // 3. XỬ LÝ XÓA / XÓA VĨNH VIỄN
+  const handleDelete = (entry) => {
+    const id = entry._id || entry.id;
+    const title = showDeleted ? 'Xóa vĩnh viễn?' : 'Xóa bài viết?';
+    const msg = showDeleted ? 'Dữ liệu sẽ bị mất hoàn toàn.' : 'Bài viết sẽ được chuyển vào thùng rác.';
+
+    Alert.alert(title, msg, [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: showDeleted ? 'Xóa hẳn' : 'Xóa',
+        style: 'destructive',
+        onPress: async () => {
+          await diaryService.deleteEntry(id);
+          fetchEntries();
+        }
+      }
+    ]);
   };
 
-  const handleDeleteEntry = (entry) => {
-    const isDeleted = entry.isDeleted || entry.deleted;
-    
-    if (isDeleted) {
-      Alert.alert('Restore Entry', 'Do you want to restore this entry?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          style: 'default',
-          onPress: async () => {
-            try {
-              await diaryService.restoreEntry(diaryId, entry.id || entry._id);
-              fetchEntries();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to restore entry');
-            }
-          },
-        },
-      ]);
-    } else {
-      Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await diaryService.deleteEntry(diaryId, entry.id || entry._id);
-              fetchEntries();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete entry');
-            }
-          },
-        },
-      ]);
-    }
+  // 4. KHÔI PHỤC
+  const handleRestore = async (entry) => {
+    await diaryService.restoreEntry(entry._id || entry.id);
+    fetchEntries();
   };
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'top']}>
+      <SafeAreaView style={{ flex: 1, paddingBottom: 60 }}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
-          <TouchableOpacity style={styles.backButton} onPress={() => onNavigate('Home')}>
+          <TouchableOpacity onPress={() => onNavigate('Home')} style={styles.backButton}>
             <MaterialIcons name="arrow-back" size={28} color={themeColors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: themeColors.text }]}>
-            {showDeleted ? 'Deleted Entries' : 'Diary Entries'}
+            {showDeleted ? 'Thùng rác' : 'Nhật ký của tôi'}
           </Text>
-          <TouchableOpacity
-            style={[styles.trashButton, showDeleted && { backgroundColor: COLORS.primary + '15' }]}
-            onPress={() => setShowDeleted(!showDeleted)}
+          <TouchableOpacity 
+            onPress={() => setShowDeleted(!showDeleted)} 
+            style={[styles.trashButton, showDeleted && { backgroundColor: COLORS.primary + '20' }]}
           >
             <MaterialIcons 
-              name={showDeleted ? 'restore' : 'delete-outline'} 
+              name={showDeleted ? 'history' : 'delete-sweep'} 
               size={24} 
               color={showDeleted ? COLORS.primary : themeColors.textMuted} 
             />
@@ -162,66 +105,59 @@ const HistoryScreen = ({ onNavigate, params }) => {
         </View>
 
         {/* Search */}
-        <View style={[styles.searchContainer, { borderBottomColor: themeColors.border }]}>
+        <View style={styles.searchBoxContainer}>
           <View style={[styles.searchBox, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
             <MaterialIcons name="search" size={20} color={themeColors.textSecondary} />
-            <TextInput
-              style={[styles.searchInput, { color: themeColors.text }]}
-              placeholder="Search entries..."
+            <TextInput 
+              placeholder="Tìm kiếm..." 
+              value={searchText} 
+              onChangeText={setSearchText} 
+              style={[styles.searchInput, { color: themeColors.text }]} 
               placeholderTextColor={themeColors.textMuted}
-              value={searchText}
-              onChangeText={setSearchText}
             />
           </View>
         </View>
 
-        {/* Content */}
-        {loading ? (
-          <LoadingSpinner />
-        ) : groupedSections.length === 0 ? (
-          <EmptyState
-            icon="calendar-today"
-            title={entries.length === 0 ? 'No Entries' : 'No Results'}
-            message="Start writing or try different search"
-          />
-        ) : (
+        {loading ? <LoadingSpinner /> : (
           <SectionList
             sections={groupedSections}
-            keyExtractor={(item) => item.id || item._id}
+            keyExtractor={item => item._id || item.id}
+            contentContainerStyle={styles.list}
             renderItem={({ item }) => (
               <HistoryEntryItem
                 entry={item}
-                onPress={() => handleSelectEntry(item)}
+                onPress={() => !showDeleted && onNavigate('NewEntry', { entryId: item._id || item.id, returnTo: 'History' })}
                 themeColors={themeColors}
-                isDeleted={item.isDeleted || item.deleted}
-                onDelete={() => handleDeleteEntry(item)}
+                isDeleted={showDeleted}
+                onDelete={() => handleDelete(item)}
+                onRestore={() => handleRestore(item)}
               />
             )}
             renderSectionHeader={({ section: { title } }) => (
-              <Text style={[styles.sectionHeader, { color: themeColors.text, backgroundColor: themeColors.background }]}>
-                {title}
-              </Text>
+              <Text style={[styles.sectionHeader, { color: themeColors.text }]}>{title}</Text>
             )}
-            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <EmptyState icon={showDeleted ? "delete-outline" : "history"} title={showDeleted ? "Thùng rác trống" : "Không có dữ liệu"} />
+            }
           />
         )}
       </SafeAreaView>
+      <BottomNav activeScreen="History" onNavigate={onNavigate} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  safeArea: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  backButton: { padding: 8 },
-  trashButton: { padding: 8, borderRadius: 8 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', textAlign: 'center' },
-  searchContainer: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, gap: 8 },
-  searchInput: { flex: 1, fontSize: 14 },
-  listContent: { paddingHorizontal: 12, paddingVertical: 8 },
-  sectionHeader: { fontSize: 14, fontWeight: '700', paddingHorizontal: 16, paddingVertical: 12, marginTop: 12 }
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  backButton: { padding: 4 },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: '800', textAlign: 'center', fontFamily: FONTS.ui.bold },
+  trashButton: { padding: 8, borderRadius: 12 },
+  searchBoxContainer: { padding: 16 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1, gap: 10 },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: FONTS.ui.regular },
+  list: { padding: 16 },
+  sectionHeader: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', opacity: 0.5, marginVertical: 8, fontFamily: FONTS.ui.bold }
 });
 
 export default HistoryScreen;

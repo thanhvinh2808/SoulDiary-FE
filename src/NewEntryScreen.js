@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS, getThemeColors } from './theme';
+import { COLORS, getThemeColors, FONTS, TYPOGRAPHY } from './theme';
 import { diaryService } from './services/diaryService';
 import { useTheme } from './context/ThemeContext';
 
@@ -28,18 +28,16 @@ const MOODS = [
   { id: 'anxious', emoji: '😰', label: 'Anxious' },
 ];
 
-const NewEntryScreen = ({ onClose, params }) => {
+const NewEntryScreen = ({ onClose, entryId, diaryId, initialDate, ...params }) => {
   const { isDark } = useTheme();
   const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
   
-  const entryId = params?.entryId;
-  const diaryId = params?.diaryId;
-
   // State
   const [selectedMood, setSelectedMood] = useState('happy');
   const [title, setTitle] = useState('');
   const [entryText, setEntryText] = useState('');
+  const [entryDate, setEntryDate] = useState(initialDate ? new Date(initialDate) : new Date());
   const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingEntry, setLoadingEntry] = useState(false);
@@ -60,6 +58,9 @@ const NewEntryScreen = ({ onClose, params }) => {
             setSelectedMood(entry.mood || 'neutral');
             setVisibility(entry.visibility || 'private');
             setTags(entry.tags || []);
+            if (entry.entryDate || entry.date || entry.createdAt) {
+              setEntryDate(new Date(entry.entryDate || entry.date || entry.createdAt));
+            }
           }
         } catch (error) {
           console.error('Failed to load entry:', error);
@@ -87,11 +88,12 @@ const NewEntryScreen = ({ onClose, params }) => {
            content: entryText,
            mood: selectedMood,
            tags: tags,
-           visibility: visibility
+           visibility: visibility,
+           entryDate: entryDate.toISOString()
          });
          Alert.alert("Success", "Journal updated!");
        } else {
-         await diaryService.createEntry(finalTitle, entryText, selectedMood, new Date(), tags);
+         await diaryService.createEntry(finalTitle, entryText, selectedMood, entryDate, tags);
          Alert.alert("Success", "New Journal created!");
        }
        onClose(); 
@@ -132,7 +134,7 @@ const NewEntryScreen = ({ onClose, params }) => {
             <Text style={[styles.headerTitle, { color: themeColors.text }]}>
               {loadingEntry ? 'Loading...' : entryId ? 'Edit Entry' : 'New Entry'}
             </Text>
-            <Text style={[styles.headerDate, { color: themeColors.textMuted }]}>{new Date().toDateString()}</Text>
+            <Text style={[styles.headerDate, { color: themeColors.textMuted }]}>{entryDate.toDateString()}</Text>
           </View>
           
           <TouchableOpacity 
@@ -263,32 +265,32 @@ const styles = StyleSheet.create({
   keyboardView: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
   headerTitleContainer: { alignItems: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '700' },
-  headerDate: { fontSize: 10, textTransform: 'uppercase' },
-  doneButtonText: { color: COLORS.primary, fontSize: 16, fontWeight: '700' },
+  headerTitle: { fontSize: 16, fontWeight: '700', fontFamily: FONTS.ui.bold },
+  headerDate: { fontSize: 10, textTransform: 'uppercase', fontFamily: FONTS.ui.medium },
+  doneButtonText: { color: COLORS.primary, fontSize: 16, fontWeight: '700', fontFamily: FONTS.ui.bold },
   scrollContent: { paddingHorizontal: 24, paddingVertical: 16 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', textAlign: 'center', marginBottom: 16 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', textAlign: 'center', marginBottom: 16, fontFamily: FONTS.ui.bold },
   moodSection: { marginBottom: 16 },
   moodContainer: { flexDirection: 'row', justifyContent: 'center', gap: 12 },
   moodItem: { alignItems: 'center', width: 56 },
   moodIconContainer: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'transparent' },
   moodEmoji: { fontSize: 24 },
-  moodLabel: { fontSize: 10, fontWeight: '600', marginTop: 4 },
+  moodLabel: { fontSize: 10, fontWeight: '600', marginTop: 4, fontFamily: FONTS.ui.semiBold },
   divider: { height: 1, marginVertical: 16 },
-  titleInput: { fontSize: 24, fontWeight: '700', marginBottom: 12, padding: 0 },
+  titleInput: { fontSize: 24, fontWeight: '700', marginBottom: 12, padding: 0, fontFamily: FONTS.ui.bold },
   editorContainer: { minHeight: 200 },
-  editor: { fontSize: 16, lineHeight: 24, padding: 0, textAlignVertical: 'top' },
+  editor: { fontSize: 17, lineHeight: 28, padding: 0, textAlignVertical: 'top', fontFamily: FONTS.content.regular },
   tagsSection: { marginTop: 24 },
   tagsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
-  tagsTitle: { fontSize: 14, fontWeight: '600' },
+  tagsTitle: { fontSize: 14, fontWeight: '600', fontFamily: FONTS.ui.semiBold },
   tagsList: { flexDirection: 'row', gap: 8 },
   tag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, gap: 4 },
   tagAdd: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', gap: 4 },
-  tagText: { fontSize: 12, fontWeight: '500' },
+  tagText: { fontSize: 12, fontWeight: '500', fontFamily: FONTS.ui.medium },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '80%', padding: 24, borderRadius: 16 },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16 },
-  modalInput: { borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16, fontFamily: FONTS.ui.bold },
+  modalInput: { borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 20, fontFamily: FONTS.ui.regular },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 16 },
   modalButton: { padding: 8 }
 });

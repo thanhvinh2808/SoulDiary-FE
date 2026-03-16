@@ -50,6 +50,38 @@ export const COLORS = {
   }
 };
 
+// Global Typography Sync
+export const FONTS = {
+  // UI - Modern & Clean
+  ui: {
+    regular: 'Manrope_400Regular',
+    medium: 'Manrope_500Medium',
+    semiBold: 'Manrope_600SemiBold',
+    bold: 'Manrope_700Bold',
+    extraBold: 'Manrope_800ExtraBold',
+  },
+  // Content - Storytelling & Classic
+  content: {
+    regular: 'Lora_400Regular',
+    medium: 'Lora_500Medium',
+    italic: 'Lora_400Regular_Italic',
+  }
+};
+
+export const TYPOGRAPHY = {
+  h1: { fontFamily: FONTS.ui.extraBold, fontSize: 32 },
+  h2: { fontFamily: FONTS.ui.bold, fontSize: 24 },
+  h3: { fontFamily: FONTS.ui.bold, fontSize: 18 },
+  body: { fontFamily: FONTS.ui.regular, fontSize: 14 },
+  bodyMedium: { fontFamily: FONTS.ui.medium, fontSize: 14 },
+  bodyBold: { fontFamily: FONTS.ui.bold, fontSize: 14 },
+  caption: { fontFamily: FONTS.ui.medium, fontSize: 12 },
+  
+  // Đặc biệt cho trang viết nhật ký
+  journalTitle: { fontFamily: FONTS.ui.bold, fontSize: 24 },
+  journalContent: { fontFamily: FONTS.content.regular, fontSize: 16, lineHeight: 26 },
+};
+
 // Helper function to get colors based on theme
 export const getThemeColors = (isDark) => {
   if (isDark) {

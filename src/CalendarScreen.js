@@ -7,26 +7,25 @@ import {
   StatusBar,
   ScrollView,
   Platform,
-  Dimensions,
   ActivityIndicator,
   Alert,
   Modal,
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { COLORS, getThemeColors } from './theme';
+import { COLORS, getThemeColors, FONTS } from './theme';
 import { diaryService } from './services/diaryService';
 import { useTheme } from './context/ThemeContext';
+import { BottomNav } from './components/Home';
 
-const { width } = Dimensions.get('window');
 const MOOD_COLORS = {
-    happy: '#FCD34D', // Amber-300
-    sad: '#93C5FD', // Blue-300
-    neutral: '#6EE7B7', // Emerald-300
-    angry: '#FCA5A1', // Red-300
-    anxious: '#E879F9', // Purple-300
-    excited: '#F472B6', // Pink-300
-    tired: '#A5B4FC', // Indigo-300
+    happy: '#FCD34D',
+    sad: '#93C5FD',
+    neutral: '#6EE7B7',
+    angry: '#FCA5A1',
+    anxious: '#E879F9',
+    excited: '#F472B6',
+    tired: '#A5B4FC',
 };
 
 const MOOD_ICONS = {
@@ -39,12 +38,10 @@ const MOOD_ICONS = {
     tired: 'bedtime',
 };
 
-const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...props }) => {
+const CalendarScreen = ({ onNavigate }) => {
   const { isDark } = useTheme();
   const themeColors = getThemeColors(isDark);
   const insets = useSafeAreaInsets();
-  // Handle diaryId from both route.params and direct props
-  const [diaryId, setDiaryId] = useState(props.route?.params?.diaryId || passedDiaryId);
 
   // State Management
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -52,101 +49,38 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedEntry, setSelectedEntry] = useState(null);
-  const [selectedDayEntries, setSelectedDayEntries] = useState([]); // All entries for selected day
-  const [entryIndex, setEntryIndex] = useState(0); // Which entry to display if multiple
-  const [showMonthPicker, setShowMonthPicker] = useState(false); // Month picker modal
+  const [selectedDayEntries, setSelectedDayEntries] = useState([]);
+  const [entryIndex, setEntryIndex] = useState(0);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
 
-  // Helper function to normalize date to local YYYY-MM-DD
   const getLocalDateString = (dateObj) => {
     if (!dateObj) return null;
-    
-    let d = dateObj;
-    if (typeof dateObj === 'string') {
-      d = new Date(dateObj);
-    }
-    
-    if (!(d instanceof Date) || isNaN(d.getTime())) {
-      return null;
-    }
-    
-    // Use local time, not UTC
+    let d = typeof dateObj === 'string' ? new Date(dateObj) : dateObj;
+    if (!(d instanceof Date) || isNaN(d.getTime())) return null;
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    
     return `${year}-${month}-${day}`;
   };
 
-  // Get month dates with mood mapping (now stores multiple entries per day)
   const getMonthDates = useCallback((date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
-    
-    console.log(`\n📅 Building calendar for ${monthNames[month]} ${year}`);
-    console.log(`   Entries available: ${entries.length}`);
-    
-    // Create a map of date string to array of entries
     const dateToEntries = {};
-    let successCount = 0;
-    let failCount = 0;
     
-    entries.forEach((entry, idx) => {
-      // Try multiple date field names in order of preference
+    entries.forEach((entry) => {
       let dateField = entry.entryDate || entry.date || entry.createdAt;
-      
-      if (!dateField) {
-        if (idx < 3) {
-          console.warn(`   ⚠️ Entry ${idx}: No date field found (all null/undefined)`);
-        }
-        failCount++;
-        return;
-      }
-      
-      try {
-        // Use helper to parse and normalize date
+      if (dateField) {
         const dateStr = getLocalDateString(dateField);
-        
-        if (!dateStr) {
-          console.warn(`   ⚠️ Entry ${idx}: Could not parse date from "${dateField}"`);
-          failCount++;
-          return;
+        if (dateStr) {
+          if (!dateToEntries[dateStr]) dateToEntries[dateStr] = [];
+          dateToEntries[dateStr].push(entry);
         }
-        
-        // Initialize array if first entry for this date
-        if (!dateToEntries[dateStr]) {
-          dateToEntries[dateStr] = [];
-        }
-        
-        // Add entry to the array for this date
-        dateToEntries[dateStr].push(entry);
-        
-        // Log first few successful mappings
-        if (successCount < 5) {
-          console.log(`   ✅ Entry ${idx}: "${entry.title?.substring(0, 20)}" → ${dateStr} (${entry.mood})`);
-        }
-        
-        successCount++;
-        
-      } catch (e) {
-        console.error(`   ❌ Entry ${idx}: Error processing - ${e.message}`);
-        failCount++;
       }
     });
-    
-    console.log(`   📊 Mapping summary: ${successCount} mapped, ${failCount} failed`);
-    console.log(`   🗓️ Unique dates with entries: ${Object.keys(dateToEntries).length}`);
-    
-    // Log sample of mapped dates with entry counts
-    const sampleDates = Object.keys(dateToEntries).slice(0, 5);
-    if (sampleDates.length > 0) {
-      console.log(`   Sample mapped dates:`);
-      sampleDates.forEach(dateStr => {
-        console.log(`      ${dateStr}: ${dateToEntries[dateStr].length} entry/entries`);
-      });
-    }
 
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
@@ -155,32 +89,17 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
 
     const weeks = [];
     let week = Array(startingDayOfWeek).fill(null);
-    let daysWithEntries = 0;
-
-    // Debug: collect calendar dates to compare
-    const calendarDates = [];
 
     for (let day = 1; day <= daysInMonth; day++) {
-      // Use consistent date string generation
       const dateStr = getLocalDateString(new Date(year, month, day));
       const dayEntries = dateToEntries[dateStr] || [];
-      
-      if (day <= 3) {
-        calendarDates.push(dateStr);
-      }
-      
-      if (dayEntries.length > 0) {
-        daysWithEntries++;
-      }
-      
-      // Use the most recent (last) entry for mood indicator
       const latestEntry = dayEntries.length > 0 ? dayEntries[dayEntries.length - 1] : null;
       
       week.push({
         day,
         mood: latestEntry?.mood || null,
         hasEntry: dayEntries.length > 0,
-        entries: dayEntries, // All entries for this day
+        entries: dayEntries,
         date: new Date(year, month, day),
       });
 
@@ -190,115 +109,40 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
       }
     }
 
-    // Fill remaining cells
     if (week.length > 0) {
-      while (week.length < 7) {
-        week.push(null);
-      }
+      while (week.length < 7) week.push(null);
       weeks.push(week);
     }
-
-    // Debug output showing calendar date format and matches
-    if (calendarDates.length > 0) {
-      console.log(`   Calendar dates generated: ${calendarDates.join(', ')}`);
-    }
-    console.log(`   🎯 Calendar ready with ${daysWithEntries} days showing entries\n`);
     return weeks;
   }, [entries]);
 
-  // Load entries
-  const loadEntries = useCallback(async (targetDiaryId) => {
+  const loadEntries = useCallback(async () => {
     try {
       setLoading(true);
-      const finalDiaryId = targetDiaryId || diaryId;
-      
-      console.log('📥 CalendarScreen loadEntries called with diaryId:', finalDiaryId);
-      
-      // If still no diaryId, fetch default diary
-      if (!finalDiaryId) {
-        console.log('⚠️ No diaryId provided in CalendarScreen, fetching default diary...');
-        const diaries = await diaryService.getDiaries();
-        console.log('📚 Fetched diaries:', diaries?.length || 0);
-        
-        if (diaries && diaries.length > 0) {
-          const defaultId = diaries[0].id || diaries[0]._id;
-          console.log('✅ Using default diary ID:', defaultId);
-          setDiaryId(defaultId);
-          
-          const data = await diaryService.getEntries(defaultId);
-          console.log('📝 Fetched entries for default diary:', data?.length || 0, 'entries');
-          
-          if (data && data.length > 0) {
-            console.log('🔍 Detailed entry analysis:');
-            data.slice(0, 5).forEach((entry, idx) => {
-              console.log(`   Entry ${idx}:`);
-              console.log(`      Title: ${entry.title?.substring(0, 30)}`);
-              console.log(`      Mood: ${entry.mood}`);
-              console.log(`      entryDate: ${entry.entryDate}`);
-              console.log(`      date: ${entry.date}`);
-              console.log(`      createdAt: ${entry.createdAt}`);
-            });
-          }
-          
-          setEntries(data || []);
-          return;
-        } else {
-          console.error('❌ No diaries found');
-          setEntries([]);
-          return;
-        }
-      }
-      
-      // Fetch entries for the specified diary
-      console.log('🔄 Fetching entries for diary:', finalDiaryId);
-      const data = await diaryService.getEntries(finalDiaryId);
-      
-      console.log('✅ Entries fetched successfully:');
-      console.log('   Total count:', data?.length || 0);
-      console.log('   Array type:', Array.isArray(data) ? 'Array' : typeof data);
-      
-      if (data && data.length > 0) {
-        console.log('🔍 Detailed entry analysis (first 5):');
-        data.slice(0, 5).forEach((entry, idx) => {
-          const dateField = entry.entryDate || entry.date || entry.createdAt;
-          console.log(`   [${idx}] "${entry.title?.substring(0, 25)}" → ${dateField} (Mood: ${entry.mood})`);
-        });
-        console.log(`   ... and ${Math.max(0, data.length - 5)} more entries`);
-      } else {
-        console.warn('⚠️ No entries returned from API');
-      }
-      
+      const data = await diaryService.getEntries({ limit: 500 });
       setEntries(data || []);
     } catch (error) {
-      console.error('📥 Error loading entries:', error);
-      console.error('   Error details:', error.message);
+      console.error('Error loading calendar entries:', error);
       Alert.alert('Error', 'Failed to load calendar entries');
     } finally {
       setLoading(false);
     }
-  }, [diaryId]);
+  }, []);
 
   useEffect(() => {
-    loadEntries(diaryId);
-  }, [diaryId, loadEntries]);
+    loadEntries();
+  }, [loadEntries]);
 
-  // Auto-select today's entries when calendar loads
   useEffect(() => {
     if (entries.length > 0 && !selectedEntry) {
       const today = new Date();
-      const todayStr = getLocalDateString(today);
-      
-      // Find today in the month dates
       const monthDates = getMonthDates(currentDate);
-      
       for (const week of monthDates) {
         for (const dayObj of week) {
           if (dayObj && dayObj.day === today.getDate() && 
               dayObj.date.getMonth() === today.getMonth() &&
               dayObj.date.getFullYear() === today.getFullYear()) {
-            
             if (dayObj.entries && dayObj.entries.length > 0) {
-              console.log(`📌 Auto-selecting today (${todayStr}) with ${dayObj.entries.length} entry/entries`);
               setSelectedDate(dayObj.date);
               setEntryIndex(0);
               setSelectedDayEntries(dayObj.entries);
@@ -312,37 +156,25 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
   }, [entries, currentDate]);
   
   const monthDates = getMonthDates(currentDate);
-  const selectedEntryData = selectedEntry;
 
-  const handlePreviousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  };
-
-  const handleNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-  };
-
-  const handleToday = () => {
-    setCurrentDate(new Date());
-    setSelectedDate(new Date());
-  };
+  const handlePreviousMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  const handleNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  const handleToday = () => { setCurrentDate(new Date()); setSelectedDate(new Date()); };
 
   const handleDayPress = (dayObj) => {
     if (dayObj) {
       setSelectedDate(dayObj.date);
-      setEntryIndex(0); // Reset to first entry
-      
+      setEntryIndex(0);
       if (dayObj.entries && dayObj.entries.length > 0) {
         setSelectedDayEntries(dayObj.entries);
-        setSelectedEntry(dayObj.entries[0]); // Show first entry
+        setSelectedEntry(dayObj.entries[0]);
       } else {
         setSelectedDayEntries([]);
-        setSelectedEntry(null); // Clear previous entry if day has no entry
+        setSelectedEntry(null);
       }
     }
   };
 
-  // Navigation helpers for multiple entries
   const handlePreviousEntry = () => {
     if (entryIndex > 0) {
       setEntryIndex(entryIndex - 1);
@@ -361,41 +193,23 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
     if (selectedEntry) {
       onNavigate('NewEntry', { 
         entryId: selectedEntry._id || selectedEntry.id,
-        diaryId,
         returnTo: 'Calendar'
       });
     }
   };
 
-  const themeStyles = {
-    container: { backgroundColor: themeColors.background },
-    textPrimary: { color: themeColors.text },
-    textSecondary: { color: themeColors.textSecondary },
-    cardBg: { backgroundColor: themeColors.surface },
-    navBg: { backgroundColor: isDark ? 'rgba(26, 26, 26, 0.95)' : 'rgba(255, 255, 255, 0.95)' },
-  };
-
   const renderDay = (dayObj, index) => {
     if (!dayObj) return <View key={index} style={styles.dayCell} />;
-
     const isSelected = selectedDate.getDate() === dayObj.day && 
                       selectedDate.getMonth() === currentDate.getMonth() &&
                       selectedDate.getFullYear() === currentDate.getFullYear();
-
     return (
       <TouchableOpacity 
         key={index}
-        style={[
-          styles.dayCell,
-          isSelected && [styles.dayCellSelected, { backgroundColor: COLORS.primary + '20' }]
-        ]}
+        style={[styles.dayCell, isSelected && [styles.dayCellSelected, { backgroundColor: COLORS.primary + '20' }]]}
         onPress={() => handleDayPress(dayObj)}
       >
-        <Text style={[
-          styles.dayText,
-          { color: themeColors.text },
-          isSelected && styles.dayTextSelected
-        ]}>
+        <Text style={[styles.dayText, { color: themeColors.text }, isSelected && styles.dayTextSelected]}>
           {dayObj.day}
         </Text>
         {dayObj.hasEntry && dayObj.mood && (
@@ -406,646 +220,181 @@ const CalendarScreen = ({ navigation, onNavigate, diaryId: passedDiaryId, ...pro
   };
 
   return (
-    <View style={[styles.container, themeStyles.container]}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView style={{ flex: 1, paddingTop: 0 }} edges={['left', 'right', 'top']}>
         
-        {/* Enhanced Header */}
-        <View style={[styles.header, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
-          <TouchableOpacity 
-            style={[styles.navIconButton, { backgroundColor: themeColors.surface }]} 
-            onPress={handlePreviousMonth}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
-          >
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: insets.top, backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
+          <TouchableOpacity onPress={handlePreviousMonth} style={styles.navIconButton}>
             <MaterialIcons name="chevron-left" size={28} color={COLORS.primary} />
           </TouchableOpacity>
 
-          {/* Month/Year Selector */}
-          <TouchableOpacity 
-            style={[styles.monthYearButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
-            onPress={() => setShowMonthPicker(true)}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity onPress={() => setShowMonthPicker(true)} style={styles.monthYearButton}>
             <View>
-              <Text style={[styles.monthText, { color: COLORS.primary }]}>
-                {monthNames[currentDate.getMonth()]}
-              </Text>
-              <Text style={[styles.yearText, { color: themeColors.textMuted }]}>
-                {currentDate.getFullYear()}
-              </Text>
+              <Text style={styles.monthText}>{monthNames[currentDate.getMonth()]}</Text>
+              <Text style={[styles.yearText, { color: themeColors.textMuted }]}>{currentDate.getFullYear()}</Text>
             </View>
             <MaterialIcons name="expand-more" size={20} color={COLORS.primary} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.navIconButton, { backgroundColor: themeColors.surface }]} 
-            onPress={handleNextMonth}
-            hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
-          >
+          <TouchableOpacity onPress={handleNextMonth} style={styles.navIconButton}>
             <MaterialIcons name="chevron-right" size={28} color={COLORS.primary} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.todayButton} 
-            onPress={handleToday}
-          >
-            <MaterialIcons name="calendar-today" size={18} color="#FFF" />
+          <TouchableOpacity onPress={handleToday} style={styles.todayButton}>
             <Text style={styles.todayText}>Today</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Month/Year Picker Modal */}
-        <Modal
-          visible={showMonthPicker}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowMonthPicker(false)}
-        >
-          <TouchableOpacity 
-            style={styles.modalOverlay}
-            onPress={() => setShowMonthPicker(false)}
-            activeOpacity={1}
-          >
-            <View style={[styles.monthPickerModal, { backgroundColor: themeColors.surface }]}>
-              <Text style={[styles.modalTitle, { color: themeColors.text }]}>Select Month & Year</Text>
-              
-              {/* Year Selector */}
-              <View style={styles.pickerSection}>
-                <Text style={[styles.pickerLabel, { color: COLORS.primary }]}>Year</Text>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.yearScroller}
-                >
-                  {Array.from({ length: 11 }, (_, i) => currentDate.getFullYear() - 5 + i).map(year => (
-                    <TouchableOpacity
-                      key={year}
-                      style={[
-                        styles.yearChip,
-                        { backgroundColor: themeColors.background, borderColor: themeColors.border },
-                        currentDate.getFullYear() === year && styles.yearChipActive
-                      ]}
-                      onPress={() => {
-                        const newDate = new Date(year, currentDate.getMonth(), 1);
-                        setCurrentDate(newDate);
-                      }}
-                    >
-                      <Text style={[
-                        styles.yearChipText,
-                        { color: themeColors.text },
-                        currentDate.getFullYear() === year && styles.yearChipTextActive
-                      ]}>
-                        {year}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Month Selector */}
-              <View style={styles.pickerSection}>
-                <Text style={[styles.pickerLabel, { color: COLORS.primary }]}>Month</Text>
-                <View style={styles.monthGrid}>
-                  {monthNames.map((month, index) => (
-                    <TouchableOpacity
-                      key={month}
-                      style={[
-                        styles.monthChip,
-                        { backgroundColor: themeColors.background, borderColor: themeColors.border },
-                        currentDate.getMonth() === index && styles.monthChipActive
-                      ]}
-                      onPress={() => {
-                        const newDate = new Date(currentDate.getFullYear(), index, 1);
-                        setCurrentDate(newDate);
-                        setTimeout(() => setShowMonthPicker(false), 200);
-                      }}
-                    >
-                      <Text style={[
-                        styles.monthChipText,
-                        { color: themeColors.text },
-                        currentDate.getMonth() === index && styles.monthChipTextActive
-                      ]}>
-                        {month.substring(0, 3)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              <TouchableOpacity 
-                style={styles.closeButton}
-                onPress={() => setShowMonthPicker(false)}
-              >
-                <Text style={styles.closeButtonText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </Modal>
-
         {loading ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          </View>
+          <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 50 }} />
         ) : (
           <ScrollView contentContainerStyle={styles.scrollContent}>
-            
-            {/* Calendar Grid */}
             <View style={styles.calendarContainer}>
-              {/* Weekday Headers */}
               <View style={styles.weekRow}>
                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                  <View key={i} style={styles.dayHeaderCell}>
-                    <Text style={[styles.dayHeaderText, { color: themeColors.textMuted }]}>{day}</Text>
-                  </View>
+                  <View key={i} style={styles.dayHeaderCell}><Text style={{ color: themeColors.textMuted, fontSize: 11, fontFamily: FONTS.ui.medium }}>{day}</Text></View>
                 ))}
               </View>
-
-              {/* Days Grid */}
               <View style={styles.daysGrid}>
-                {monthDates.map((week, weekIndex) => (
-                  week.map((day, dayIndex) => renderDay(day, `${weekIndex}-${dayIndex}`))
-                ))}
+                {monthDates.map((week, wi) => week.map((day, di) => renderDay(day, `${wi}-${di}`)))}
               </View>
             </View>
 
-            {/* Selected Date Header */}
             <View style={styles.dateHeader}>
               <Text style={[styles.dateTitle, { color: themeColors.text }]}>
                 {monthNames[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()}
               </Text>
             </View>
 
-            {/* Entry Summary Card */}
-            {selectedEntryData ? (
+            {selectedEntry ? (
               <View style={styles.entrySummaryContainer}>
                 <View style={[styles.entryCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-                  {/* Entry counter if multiple entries */}
                   {selectedDayEntries.length > 1 && (
-                    <View style={[styles.entryCounter, { borderBottomColor: themeColors.border }]}>
-                      <Text style={[styles.entryCounterText, { color: themeColors.textMuted }]}>
-                        Entry {entryIndex + 1} of {selectedDayEntries.length}
-                      </Text>
-                    </View>
+                    <Text style={{ color: themeColors.textMuted, fontSize: 12, marginBottom: 8, fontFamily: FONTS.ui.medium }}>Entry {entryIndex + 1} of {selectedDayEntries.length}</Text>
                   )}
-                  
                   <View style={styles.entryHeader}>
-                    <View style={[
-                      styles.moodIconBg, 
-                      { backgroundColor: `${MOOD_COLORS[selectedEntryData.mood] || MOOD_COLORS.neutral}30` }
-                    ]}>
-                      <MaterialIcons 
-                        name={MOOD_ICONS[selectedEntryData.mood] || 'sentiment-satisfied'} 
-                        size={24} 
-                        color={MOOD_COLORS[selectedEntryData.mood] || MOOD_COLORS.neutral} 
-                      />
+                    <View style={[styles.moodIconBg, { backgroundColor: (MOOD_COLORS[selectedEntry.mood] || MOOD_COLORS.neutral) + '30' }]}>
+                      <MaterialIcons name={MOOD_ICONS[selectedEntry.mood] || 'sentiment-satisfied'} size={24} color={MOOD_COLORS[selectedEntry.mood] || MOOD_COLORS.neutral} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.moodLabel, { color: themeColors.textSecondary }]}>MOOD: {selectedEntryData.mood?.toUpperCase() || 'NEUTRAL'}</Text>
-                      <Text style={[styles.timeLabel, { color: themeColors.textMuted }]}>
-                        {new Date(selectedEntryData.createdAt).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </Text>
+                    <View>
+                      <Text style={[styles.moodLabel, { color: themeColors.textSecondary }]}>{selectedEntry.mood?.toUpperCase()}</Text>
+                      <Text style={{ color: themeColors.textMuted, fontSize: 12, fontFamily: FONTS.ui.regular }}>{new Date(selectedEntry.createdAt).toLocaleTimeString()}</Text>
                     </View>
                   </View>
-                  
-                  <Text style={[styles.entryTitle, { color: themeColors.text }]}>{selectedEntryData.title || 'Untitled'}</Text>
-                  <Text style={[styles.entrySnippet, { color: themeColors.textSecondary }]} numberOfLines={3}>
-                    {selectedEntryData.content || 'No content'}
-                  </Text>
-
+                  <Text style={[styles.entryTitle, { color: themeColors.text }]}>{selectedEntry.title || 'Untitled'}</Text>
+                  <Text style={[styles.entrySnippet, { color: themeColors.textSecondary }]} numberOfLines={3}>{selectedEntry.content}</Text>
                   <View style={styles.entryFooter}>
-                    <TouchableOpacity 
-                      style={[styles.navButton, { borderColor: COLORS.primary }, selectedDayEntries.length <= 1 || entryIndex === 0 ? { opacity: 0.3 } : {}]}
-                      onPress={handlePreviousEntry}
-                      disabled={entryIndex === 0}
-                    >
-                      <MaterialIcons name="chevron-left" size={20} color={COLORS.primary} />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity style={styles.readMoreButton} onPress={handleEditEntry}>
-                      <Text style={styles.readMoreText}>Edit entry</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.navButton, { borderColor: COLORS.primary }, selectedDayEntries.length <= 1 || entryIndex === selectedDayEntries.length - 1 ? { opacity: 0.3 } : {}]}
-                      onPress={handleNextEntry}
-                      disabled={entryIndex === selectedDayEntries.length - 1}
-                    >
-                      <MaterialIcons name="chevron-right" size={20} color={COLORS.primary} />
-                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handlePreviousEntry} disabled={entryIndex === 0} style={[styles.navButton, entryIndex === 0 && { opacity: 0.3 }]}><MaterialIcons name="chevron-left" size={20} color={COLORS.primary} /></TouchableOpacity>
+                    <TouchableOpacity onPress={handleEditEntry} style={styles.readMoreButton}><Text style={styles.readMoreText}>Edit entry</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={handleNextEntry} disabled={entryIndex === selectedDayEntries.length - 1} style={[styles.navButton, entryIndex === selectedDayEntries.length - 1 && { opacity: 0.3 }]}><MaterialIcons name="chevron-right" size={20} color={COLORS.primary} /></TouchableOpacity>
                   </View>
                 </View>
               </View>
             ) : (
               <View style={styles.entrySummaryContainer}>
                 <View style={[styles.entryCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border, alignItems: 'center', paddingVertical: 40 }]}>
-                  <MaterialIcons name="calendar-today" size={40} color={themeColors.textMuted} />
-                  <Text style={[styles.entryTitle, { marginTop: 16, color: themeColors.textMuted }]}>
-                    No entry found
-                  </Text>
-                  <Text style={[styles.entrySnippet, { color: themeColors.textMuted, marginBottom: 0 }]}>
-                    Select a date with an entry or create a new one
-                  </Text>
+                  <MaterialIcons name="event-note" size={40} color={themeColors.textMuted} />
+                  <Text style={{ color: themeColors.textMuted, marginTop: 12, fontFamily: FONTS.ui.regular }}>No entries for this day</Text>
                 </View>
               </View>
             )}
-
-            <View style={{ height: 100 }} />
           </ScrollView>
         )}
-
-        {/* FAB */}
-        <TouchableOpacity 
-          style={[styles.fab, !diaryId && { opacity: 0.5 }]}
-          onPress={() => onNavigate('NewEntry', { diaryId, returnTo: 'Calendar' })}
-          disabled={!diaryId}
-        >
-          <MaterialIcons name="add" size={32} color="#112111" />
-        </TouchableOpacity>
-
-        {/* Bottom Navigation */}
-        <View style={[styles.bottomNav, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
-          <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Home')}>
-            <MaterialIcons name="home" size={28} color={themeColors.textMuted} />
-            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Home</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('History', { diaryId })}>
-            <MaterialIcons name="menu-book" size={28} color={themeColors.textMuted} />
-            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Diary</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Calendar')}>
-            <MaterialIcons name="calendar-today" size={28} color={COLORS.primary} />
-            <Text style={[styles.navLabel, { color: COLORS.primary }]}>Calendar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('Analytics', { diaryId })}>
-            <MaterialIcons name="analytics" size={28} color={themeColors.textMuted} />
-            <Text style={[styles.navLabel, { color: themeColors.textMuted }]}>Insights</Text>
-          </TouchableOpacity>
-        </View>
-
       </SafeAreaView>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: COLORS.primary }]}
+        onPress={() => {
+          onNavigate('NewEntry', { 
+            initialDate: selectedDate.toISOString(),
+            returnTo: 'Calendar'
+          });
+        }}
+      >
+        <MaterialIcons name="add" size={32} color="#111811" />
+      </TouchableOpacity>
+
+      {/* Bottom Navigation */}
+      <BottomNav
+        activeScreen="Calendar"
+        onNavigate={onNavigate}
+      />
+
+      {/* Month Picker Modal */}
+      <Modal visible={showMonthPicker} transparent animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowMonthPicker(false)}>
+          <View style={[styles.monthPickerModal, { backgroundColor: themeColors.surface }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Select Month</Text>
+            <View style={styles.monthGrid}>
+              {monthNames.map((m, i) => (
+                <TouchableOpacity key={m} style={[styles.monthChip, currentDate.getMonth() === i && { backgroundColor: COLORS.primary }]} onPress={() => { setCurrentDate(new Date(currentDate.getFullYear(), i, 1)); setShowMonthPicker(false); }}>
+                  <Text style={[styles.monthChipText, { color: currentDate.getMonth() === i ? '#FFF' : themeColors.text }]}>{m.substring(0, 3)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    gap: 8,
-  },
-  navIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthYearButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    gap: 8,
-  },
-  monthText: {
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    color: COLORS.primary,
-  },
-  yearText: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    marginTop: 2,
-  },
-  todayButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-  },
-  todayText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFF',
-    fontFamily: 'Manrope_700Bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  monthPickerModal: {
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    width: '85%',
-    maxWidth: 400,
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  pickerSection: {
-    marginBottom: 20,
-  },
-  pickerLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    color: COLORS.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  yearScroller: {
-    flexGrow: 0,
-  },
-  yearChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginRight: 8,
-    borderWidth: 1,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  yearChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  yearChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-  },
-  yearChipTextActive: {
-    color: '#FFF',
-  },
-  monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  monthChip: {
-    width: '23%',
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  monthChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-  },
-  monthChipTextActive: {
-    color: '#FFF',
-  },
-  closeButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  closeButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    color: '#FFF',
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  calendarContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  dayHeaderCell: {
-    width: '14.28%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 32,
-  },
-  dayHeaderText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    fontFamily: 'Manrope_700Bold',
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayCell: {
-    width: '14.28%',
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-  },
-  dayCellSelected: {
-    backgroundColor: 'rgba(25, 230, 25, 0.2)', // Primary/20
-  },
-  dayText: {
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'Manrope_500Medium',
-  },
-  dayTextSelected: {
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-  },
-  moodDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 4,
-  },
-  dateHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  dateTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-  },
-  entrySummaryContainer: {
-    paddingHorizontal: 16,
-  },
-  entryCard: {
-    borderRadius: 12,
-    padding: 20,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  entryCounter: {
-    paddingBottom: 12,
-    marginBottom: 12,
-  },
-  entryCounterText: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-  },
-  entryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  moodIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moodLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontFamily: 'Manrope_700Bold',
-  },
-  timeLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    fontFamily: 'Manrope_400Regular',
-  },
-  entryTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    marginBottom: 8,
-  },
-  entrySnippet: {
-    fontSize: 14,
-    fontFamily: 'Manrope_400Regular',
-    lineHeight: 24,
-    marginBottom: 16,
-  },
-  entryFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  navButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    gap: -8, // Negative margin for overlap effect
-  },
-  miniTag: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  readMoreButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  readMoreText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#111811',
-    fontFamily: 'Manrope_700Bold',
-  },
+  container: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
+  navIconButton: { padding: 4 },
+  monthYearButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
+  monthText: { fontSize: 18, fontWeight: '700', color: COLORS.primary, fontFamily: FONTS.ui.bold },
+  yearText: { fontSize: 12, fontFamily: FONTS.ui.medium },
+  todayButton: { backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  todayText: { color: '#FFF', fontWeight: '700', fontSize: 12, fontFamily: FONTS.ui.bold },
+  scrollContent: { paddingBottom: 100 },
+  calendarContainer: { padding: 16 },
+  weekRow: { flexDirection: 'row', marginBottom: 8 },
+  dayHeaderCell: { width: '14.28%', alignItems: 'center' },
+  daysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  dayCell: { width: '14.28%', height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  dayCellSelected: { },
+  dayText: { fontSize: 14, fontFamily: FONTS.ui.regular },
+  dayTextSelected: { fontWeight: 'bold', fontFamily: FONTS.ui.bold },
+  moodDot: { width: 6, height: 6, borderRadius: 3, marginTop: 4 },
+  dateHeader: { padding: 16 },
+  dateTitle: { fontSize: 18, fontWeight: '700', fontFamily: FONTS.ui.bold },
+  entrySummaryContainer: { paddingHorizontal: 16 },
+  entryCard: { padding: 16, borderRadius: 12, borderWidth: 1 },
+  entryHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  moodIconBg: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  moodLabel: { fontSize: 12, fontWeight: '700', fontFamily: FONTS.ui.bold },
+  entryTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4, fontFamily: FONTS.ui.bold },
+  entrySnippet: { fontSize: 14, lineHeight: 20, marginBottom: 16, fontFamily: FONTS.ui.regular },
+  entryFooter: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20 },
+  navButton: { padding: 8, borderWidth: 1, borderRadius: 20, borderColor: COLORS.primary },
+  readMoreButton: { backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8 },
+  readMoreText: { color: '#111811', fontWeight: '700', fontSize: 12, fontFamily: FONTS.ui.bold },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  monthPickerModal: { width: '80%', padding: 20, borderRadius: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 20, textAlign: 'center', fontFamily: FONTS.ui.bold },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  monthChip: { width: '20%', paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: COLORS.primary },
+  monthChipText: { fontSize: 12, fontWeight: '700', fontFamily: FONTS.ui.bold },
   fab: {
     position: 'absolute',
-    bottom: 90,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.primary,
+    right: 20,
+    bottom: 100,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
+    elevation: 8,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 10,
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 12,
-    borderTopWidth: 1,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
+    shadowRadius: 4,
+    zIndex: 999,
   },
 });
 

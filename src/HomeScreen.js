@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from './context/ThemeContext';
-import { getThemeColors, COLORS } from './theme';
+import { getThemeColors, COLORS, FONTS } from './theme';
 import { diaryService } from './services/diaryService';
 import { authService } from './services/authService';
 import { getDailyQuote, calculateStreak } from './utils/helpers';
@@ -43,7 +43,6 @@ const HomeScreen = ({ onNavigate }) => {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [currentDiaryId, setCurrentDiaryId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeMenuScreen, setActiveMenuScreen] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -58,31 +57,11 @@ const HomeScreen = ({ onNavigate }) => {
   const fetchData = useCallback(async () => {
     try {
       if (!refreshing) setLoading(true);
-      let diaries = await diaryService.getDiaries();
-
-      if (!diaries || diaries.length === 0) {
-        try {
-          const newDiary = await diaryService.createDiary(
-            "My Journal",
-            "Your journey begins here",
-            "Personal diary created automatically"
-          );
-          diaries = [newDiary];
-        } catch (createError) {
-          console.error("Failed to create default diary", createError);
-        }
-      }
-
-      if (diaries && Array.isArray(diaries) && diaries.length > 0) {
-        const firstDiary = diaries[0];
-        setCurrentDiaryId(firstDiary.id || firstDiary._id);
-
-        const diaryEntries = await diaryService.getEntries(firstDiary.id || firstDiary._id);
-        const entriesArray = Array.isArray(diaryEntries) ? diaryEntries : [];
-        setEntries(entriesArray);
-      } else {
-        setEntries([]);
-      }
+      
+      const diaryEntries = await diaryService.getEntries({ limit: 100 });
+      const entriesArray = Array.isArray(diaryEntries) ? diaryEntries : [];
+      setEntries(entriesArray);
+      
     } catch (error) {
       console.error('Failed to fetch data', error);
       setEntries([]);
@@ -108,7 +87,6 @@ const HomeScreen = ({ onNavigate }) => {
       if (onNavigate) {
         onNavigate('NewEntry', {
           entryId: entry.id || entry._id,
-          diaryId: currentDiaryId,
           returnTo: 'Home'
         });
       }
@@ -142,7 +120,6 @@ const HomeScreen = ({ onNavigate }) => {
     return (
       <SearchScreen
         onClose={() => setActiveMenuScreen(null)}
-        diaryId={currentDiaryId}
         onSelectEntry={handleSelectEntry}
       />
     );
@@ -164,7 +141,6 @@ const HomeScreen = ({ onNavigate }) => {
         {/* Header */}
         <HomeHeader
           onMenuPress={() => setMenuOpen(true)}
-          onRefresh={onRefresh}
           onProfilePress={() => onNavigate('Profile')}
           themeColors={themeColors}
         />
@@ -190,13 +166,13 @@ const HomeScreen = ({ onNavigate }) => {
           {/* Write Button */}
           <View style={styles.actionContainer}>
             <TouchableOpacity
-              style={[styles.writeButton, (loading || !currentDiaryId) && { opacity: 0.5 }]}
-              onPress={() => onNavigate('NewEntry', { diaryId: currentDiaryId, returnTo: 'Home' })}
-              disabled={loading || !currentDiaryId}
+              style={[styles.writeButton, loading && { opacity: 0.5 }]}
+              onPress={() => onNavigate('NewEntry', { returnTo: 'Home' })}
+              disabled={loading}
             >
               <MaterialIcons name="edit-note" size={24} color="#111811" />
               <Text style={styles.writeButtonText}>
-                {loading ? 'Loading Diary...' : "Write Today's Story"}
+                {loading ? 'Loading...' : "Write Today's Story"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -205,10 +181,9 @@ const HomeScreen = ({ onNavigate }) => {
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Recent Entries</Text>
             <TouchableOpacity
-              onPress={() => onNavigate('History', { diaryId: currentDiaryId })}
-              disabled={!currentDiaryId}
+              onPress={() => onNavigate('History')}
             >
-              <Text style={[styles.viewAllText, !currentDiaryId && { opacity: 0.5 }]}>
+              <Text style={[styles.viewAllText]}>
                 VIEW ALL
               </Text>
             </TouchableOpacity>
@@ -258,8 +233,6 @@ const HomeScreen = ({ onNavigate }) => {
         <BottomNav
           activeScreen="Home"
           onNavigate={onNavigate}
-          themeColors={themeColors}
-          diaryId={currentDiaryId}
         />
       </SafeAreaView>
 
@@ -315,7 +288,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#111811',
-    fontFamily: 'Manrope_700Bold',
+    fontFamily: FONTS.ui.bold,
     letterSpacing: 0.5,
   },
   sectionHeader: {
@@ -329,14 +302,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
+    fontFamily: FONTS.ui.bold,
   },
   viewAllText: {
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.primary,
     textTransform: 'uppercase',
-    fontFamily: 'Manrope_700Bold',
+    fontFamily: FONTS.ui.bold,
   },
   entriesList: {
     paddingHorizontal: 16,
